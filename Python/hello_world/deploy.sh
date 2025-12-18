@@ -32,3 +32,7 @@ echo "Generated wifi_secrets.py"
 mpremote cp "${SCRIPT_DIR}/wifi_secrets.py" :wifi_secrets.py
 mpremote cp "${SCRIPT_DIR}/main.py" :main.py
 echo "Deployed to ESP32"
+
+# Run main.py and show output (Ctrl+C to stop)
+echo "Running main.py..."
+mpremote run "${SCRIPT_DIR}/main.py"
