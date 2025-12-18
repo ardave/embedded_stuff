@@ -2,7 +2,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${SCRIPT_DIR}/.env"
+REPO_ROOT="$(cd "${SCRIPT_DIR}" && git rev-parse --show-toplevel)"
+ENV_FILE="${REPO_ROOT}/.env"
 
 # Load .env file
 if [ -f "$ENV_FILE" ]; then
@@ -28,6 +29,6 @@ EOF
 echo "Generated wifi_secrets.py"
 
 # Upload to ESP32 (uncomment and adjust for your tool)
-# mpremote cp "${SCRIPT_DIR}/wifi_secrets.py" :wifi_secrets.py
-# mpremote cp "${SCRIPT_DIR}/main.py" :main.py
-# echo "Deployed to ESP32"
+mpremote cp "${SCRIPT_DIR}/wifi_secrets.py" :wifi_secrets.py
+mpremote cp "${SCRIPT_DIR}/main.py" :main.py
+echo "Deployed to ESP32"
