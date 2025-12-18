@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 """MicroPython simple WiFi connection demo"""
 import time
+import machine
 import network
 import urequests
 
@@ -57,3 +58,7 @@ response: urequests.Response = urequests.get(url)
 
 # Display the contents of the page
 print(response.text)
+
+# Enter deep sleep for 10 seconds
+print("Entering deep sleep for 60 seconds...")
+machine.deepsleep(60000)
