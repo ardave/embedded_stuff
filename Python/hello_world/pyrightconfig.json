@@ -3,5 +3,6 @@
   "venv": ".venv",
   "pythonVersion": "3.14",
   "extraPaths": ["./.venv/lib/python3.14/site-packages"],
+  "stubPath": "./.venv/lib/python3.14/site-packages",
   "reportMissingModuleSource": false
 }

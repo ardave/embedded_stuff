@@ -30,6 +30,8 @@ echo "Generated wifi_secrets.py"
 
 # Upload to ESP32 (uncomment and adjust for your tool)
 mpremote cp "${SCRIPT_DIR}/wifi_secrets.py" :wifi_secrets.py
+mpremote cp "${SCRIPT_DIR}/bme280.py" :bme280.py
+mpremote cp "${SCRIPT_DIR}/sh1107.py" :sh1107.py
 mpremote cp "${SCRIPT_DIR}/main.py" :main.py
 echo "Deployed to ESP32"
 
