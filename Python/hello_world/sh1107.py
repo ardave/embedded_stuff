@@ -35,17 +35,25 @@ class SH1107_I2C(framebuf.FrameBuffer):
 
         # For 90/270 rotation, swap width/height for framebuffer
         if rotate in (90, 270):
-            super().__init__(self.buffer, height, width, framebuf.MONO_VLSB)
+            super().__init__(  # pyright: ignore[reportUnknownMemberType]
+                self.buffer, height, width, framebuf.MONO_VLSB
+            )
         else:
-            super().__init__(self.buffer, width, height, framebuf.MONO_VLSB)
+            super().__init__(  # pyright: ignore[reportUnknownMemberType]
+                self.buffer, width, height, framebuf.MONO_VLSB
+            )
 
         self._init_display()
 
     def _write_cmd(self, cmd: int) -> None:
-        self.i2c.writeto(self.addr, bytes([0x00, cmd]))
+        self.i2c.writeto(  # pyright: ignore[reportUnknownMemberType]
+            self.addr, bytes([0x00, cmd])
+        )
 
-    def _write_data(self, data: bytes) -> None:
-        self.i2c.writeto(self.addr, bytes([0x40]) + data)
+    def _write_data(self, data: bytes | bytearray) -> None:
+        self.i2c.writeto(  # pyright: ignore[reportUnknownMemberType]
+            self.addr, bytes([0x40]) + data
+        )
 
     def _init_display(self) -> None:
         # Turn display off

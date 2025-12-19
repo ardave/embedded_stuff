@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 """MicroPython WiFi + BME280 sensor demo"""
 import time
+from typing import cast
 from machine import Pin, I2C
 import network
 
@@ -19,7 +20,7 @@ print("Initializing I2C...")
 i2c = I2C(0, scl=Pin(19), sda=Pin(22), freq=100000)
 
 # Scan for I2C devices
-devices = i2c.scan()
+devices = cast(list[int], i2c.scan())  # pyright: ignore[reportUnknownMemberType]
 print(f"I2C devices found: {[hex(d) for d in devices]}")
 
 # Initialize BME280
@@ -58,8 +59,8 @@ def update_display():
     try:
         temp_c, pressure_hpa, humidity = bme.read()
         # Convert to USA units
-        temp_f = temp_c * 9 / 5 + 32
-        pressure_inhg = pressure_hpa * 0.02953
+        temp_f: float = temp_c * 9 / 5 + 32
+        pressure_inhg: float = pressure_hpa * 0.02953
 
         print(f"Temperature: {temp_f:.1f} F | Pressure: {pressure_inhg:.2f} inHg | Humidity: {humidity:.1f} %")
 

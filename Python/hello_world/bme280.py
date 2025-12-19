@@ -49,7 +49,9 @@ class BME280:
         return self.i2c.readfrom_mem(self.addr, reg, length)
 
     def _write_byte(self, reg: int, value: int) -> None:
-        self.i2c.writeto_mem(self.addr, reg, bytes([value]))
+        self.i2c.writeto_mem(  # pyright: ignore[reportUnknownMemberType]
+            self.addr, reg, bytes([value])
+        )
 
     def _read_calibration(self) -> None:
         # Read temperature and pressure calibration (0x88-0x9F)
@@ -91,26 +93,25 @@ class BME280:
             return value - 0x100
         return value
 
-    def read_raw(self) -> tuple:
+    def read_raw(self) -> tuple[int, int, int]:
         """Read raw sensor data"""
         data = self._read_bytes(BME280_REG_DATA, 8)
 
-        raw_press = (data[0] << 12) | (data[1] << 4) | (data[2] >> 4)
-        raw_temp = (data[3] << 12) | (data[4] << 4) | (data[5] >> 4)
-        raw_hum = (data[6] << 8) | data[7]
+        raw_press: int = (data[0] << 12) | (data[1] << 4) | (data[2] >> 4)
+        raw_temp: int = (data[3] << 12) | (data[4] << 4) | (data[5] >> 4)
+        raw_hum: int = (data[6] << 8) | data[7]
 
         return raw_temp, raw_press, raw_hum
 
-    def read(self) -> tuple:
+    def read(self) -> tuple[float, float, float]:
         """Read compensated temperature (C), pressure (hPa), humidity (%)"""
         raw_temp, raw_press, raw_hum = self.read_raw()
 
         # Temperature compensation
-        var1 = ((raw_temp >> 3) - (self.dig_T1 << 1)) * self.dig_T2 >> 11
-        var2 = (((((raw_temp >> 4) - self.dig_T1) * ((raw_temp >> 4) - self.dig_T1)) >> 12) * self.dig_T3) >> 14
-        t_fine = var1 + var2
-        temperature = (t_fine * 5 + 128) >> 8
-        temperature = temperature / 100.0
+        var1: int = ((raw_temp >> 3) - (self.dig_T1 << 1)) * self.dig_T2 >> 11
+        var2: int = (((((raw_temp >> 4) - self.dig_T1) * ((raw_temp >> 4) - self.dig_T1)) >> 12) * self.dig_T3) >> 14
+        t_fine: int = var1 + var2
+        temperature: float = ((t_fine * 5 + 128) >> 8) / 100.0
 
         # Pressure compensation
         var1 = t_fine - 128000
@@ -119,18 +120,19 @@ class BME280:
         var2 = var2 + (self.dig_P4 << 35)
         var1 = ((var1 * var1 * self.dig_P3) >> 8) + ((var1 * self.dig_P2) << 12)
         var1 = (((1 << 47) + var1) * self.dig_P1) >> 33
+        pressure: float
         if var1 == 0:
             pressure = 0.0
         else:
-            p = 1048576 - raw_press
+            p: int = 1048576 - raw_press
             p = (((p << 31) - var2) * 3125) // var1
             var1 = (self.dig_P9 * (p >> 13) * (p >> 13)) >> 25
             var2 = (self.dig_P8 * p) >> 19
-            pressure = ((p + var1 + var2) >> 8) + (self.dig_P7 << 4)
-            pressure = pressure / 256.0 / 100.0  # Convert to hPa
+            pressure = (((p + var1 + var2) >> 8) + (self.dig_P7 << 4)) / 256.0 / 100.0
 
         # Humidity compensation
-        h = t_fine - 76800
+        h: int = t_fine - 76800
+        humidity: float
         if h == 0:
             humidity = 0.0
         else:
