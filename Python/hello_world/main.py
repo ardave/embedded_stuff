@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 """MicroPython WiFi + BME280 sensor demo"""
 import time
-from typing import cast
 from machine import Pin, I2C
 import network
 
@@ -20,7 +19,7 @@ print("Initializing I2C...")
 i2c = I2C(0, scl=Pin(19), sda=Pin(22), freq=100000)
 
 # Scan for I2C devices
-devices = cast(list[int], i2c.scan())  # pyright: ignore[reportUnknownMemberType]
+devices: list[int] = i2c.scan()  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
 print(f"I2C devices found: {[hex(d) for d in devices]}")
 
 # Initialize BME280

@@ -28,7 +28,15 @@ EOF
 
 echo "Generated wifi_secrets.py"
 
-# Upload to ESP32 (uncomment and adjust for your tool)
+# Reset device to ensure clean state
+echo "Resetting device..."
+if mpremote reset; then
+    sleep 2
+else
+    echo "Warning: Could not reset device (may not be connected)"
+fi
+
+# Upload to ESP32
 mpremote cp "${SCRIPT_DIR}/wifi_secrets.py" :wifi_secrets.py
 mpremote cp "${SCRIPT_DIR}/bme280.py" :bme280.py
 mpremote cp "${SCRIPT_DIR}/sh1107.py" :sh1107.py
