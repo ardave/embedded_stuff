@@ -12,13 +12,13 @@ SWITCH_GPIO = 4  # Button input
 led = Pin(BLINK_GPIO, Pin.OUT)
 switch = Pin(SWITCH_GPIO, Pin.IN, Pin.PULL_UP)
 
-def handle_switch_change(pin):
+def handle_switch_change(_pin: Pin) -> None:
     """Called from main context via schedule() - safe to do complex operations."""
     switch_pressed = switch.value() == 0  # Active low (pull-up)
     led.value(switch_pressed)
     print(f"Switch {'pressed' if switch_pressed else 'released'}, LED {'on' if switch_pressed else 'off'}")
 
-def switch_isr(pin):
+def switch_isr(pin: Pin) -> None:
     """ISR - keep minimal, defer work via schedule()."""
     micropython.schedule(handle_switch_change, pin)
 
