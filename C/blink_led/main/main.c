@@ -5,7 +5,7 @@
 #include "freertos/queue.h"
 #include "driver/gpio.h"
 
-#define BLINK_GPIO 8
+#define BLINK_GPIO 8 // MI pin on QT Py C3
 #define SWITCH_GPIO 4  // A0 pin on QT Py C3
 #define GPIO_TASK_PRIORITY 10
 
