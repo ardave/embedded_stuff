@@ -1,7 +1,8 @@
+use esp_idf_svc::hal::delay::BLOCK;
 use esp_idf_svc::hal::gpio::{InterruptType, PinDriver, Pull};
 use esp_idf_svc::hal::peripherals::Peripherals;
-use std::sync::mpsc;
-use std::time::Duration;
+use esp_idf_svc::hal::task::notification::Notification;
+use std::num::NonZeroU32;
 
 // GPIO 8 = MI pin on QT Py C3 (LED)
 // GPIO 4 = A0 pin on QT Py C3 (Switch)
@@ -29,16 +30,19 @@ fn main() {
         .set_interrupt_type(InterruptType::AnyEdge)
         .expect("Failed to set interrupt type");
 
-    // Create a channel for ISR to task communication (similar to FreeRTOS queue)
-    let (tx, rx) = mpsc::sync_channel::<()>(10);
+    // Create a task notification for ISR to task communication (FreeRTOS task notification)
+    // This captures the current task handle so notifications can wake this task
+    let notification = Notification::new();
+    let notifier = notification.notifier();
 
     // Subscribe to GPIO interrupts with a callback
-    // The callback runs in ISR context and sends a notification through the channel
+    // The callback runs in ISR context and uses ISR-safe task notification
     unsafe {
         switch
             .subscribe(move || {
-                // Send notification (ignore errors if channel is full)
-                let _ = tx.try_send(());
+                // Notify from ISR context - this is ISR-safe
+                // Safety: The notification/notifier will live as long as main() runs
+                notifier.notify(NonZeroU32::new(1).unwrap());
             })
             .expect("Failed to subscribe to GPIO interrupt");
     }
@@ -48,31 +52,23 @@ fn main() {
 
     log::info!("GPIO interrupt configured, waiting for button events...");
 
-    // Main loop: process button events from the channel
+    // Main loop: wait for task notifications from the ISR
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(()) => {
-                // Re-enable interrupt for next edge
-                switch.enable_interrupt().expect("Failed to re-enable interrupt");
+        // Wait for notification (blocks until notified)
+        if notification.wait(BLOCK).is_some() {
+            // Re-enable interrupt for next edge
+            switch.enable_interrupt().expect("Failed to re-enable interrupt");
 
-                // Read the current switch state (low = pressed due to pull-up)
-                let switch_pressed = switch.is_low();
+            // Read the current switch state (low = pressed due to pull-up)
+            let switch_pressed = switch.is_low();
 
-                // Set LED based on switch state
-                if switch_pressed {
-                    led.set_high().expect("Failed to set LED high");
-                    log::info!("Switch pressed - LED ON");
-                } else {
-                    led.set_low().expect("Failed to set LED low");
-                    log::info!("Switch released - LED OFF");
-                }
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                // No event, continue waiting
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                log::error!("Channel disconnected unexpectedly");
-                break;
+            // Set LED based on switch state
+            if switch_pressed {
+                led.set_high().expect("Failed to set LED high");
+                log::info!("Switch pressed - LED ON");
+            } else {
+                led.set_low().expect("Failed to set LED low");
+                log::info!("Switch released - LED OFF");
             }
         }
     }
