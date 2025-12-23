@@ -106,6 +106,10 @@ void gpioTaskHandler(void* arg) {
     while (true) {
         if (g_event_queue->receive(gpio_num)) {
             bool switch_pressed = (g_switch_pin->getLevel() == 0);
+
+            // Add 0.5 second delay before changing LED state
+            vTaskDelay(pdMS_TO_TICKS(500));
+
             esp_err_t ret = g_led_pin->setLevel(switch_pressed ? 1 : 0);
 
             if (ret != ESP_OK) {
