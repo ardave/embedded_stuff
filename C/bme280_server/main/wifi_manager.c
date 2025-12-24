@@ -39,7 +39,7 @@ static void schedule_reconnect(void)
     esp_timer_start_once(reconnect_timer, delay_ms * 1000); // Convert to microseconds
 }
 
-static void wifi_sta_event_handler(void *arg, esp_event_base_t event_base,
+static void wifi_sta_event_handler(void *_arg, esp_event_base_t _event_base,
                                    int32_t event_id, void *event_data)
 {
     switch (event_id) {
@@ -64,7 +64,7 @@ static void wifi_sta_event_handler(void *arg, esp_event_base_t event_base,
     }
 }
 
-static void ip_event_handler(void *arg, esp_event_base_t event_base,
+static void ip_event_handler(void *_arg, esp_event_base_t _event_base,
                              int32_t event_id, void *event_data)
 {
     if (event_id == IP_EVENT_STA_GOT_IP) {
