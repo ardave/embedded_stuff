@@ -19,7 +19,7 @@ if(NOT DEFINED WIFI_SSID OR NOT DEFINED WIFI_PASSWORD)
 endif()
 
 idf_component_register(
-    SRCS "bme280_server.c" "wifi_manager.c" "led_status.c"
+    SRCS "bme280_server.c" "wifi_manager.c" "led_status.c" "http_server.c"
     INCLUDE_DIRS "."
 )
 

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "nvs_flash.h"
 #include "esp_log.h"
+#include "http_server.h"
 #include "led_status.h"
 #include "wifi_manager.h"
 
@@ -28,6 +29,8 @@ void app_main(void)
     ESP_ERROR_CHECK(wifi_manager_wait_connected());
 
     ESP_LOGI(TAG, "WiFi connected! Ready for BME280 sensor operations.");
+
+    ESP_ERROR_CHECK(http_server_init());
 
     // TODO: Add BME280 sensor reading and HTTP server here
 }

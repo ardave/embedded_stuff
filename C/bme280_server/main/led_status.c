@@ -1,3 +1,5 @@
+#include <stdatomic.h>
+#include <string.h>
 #include "led_status.h"
 #include "driver/rmt_tx.h"
 #include "driver/rmt_encoder.h"
@@ -5,7 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include <string.h>
+
 
 static const char *TAG = "led_status";
 
@@ -18,7 +20,8 @@ static const char *TAG = "led_status";
 
 static rmt_channel_handle_t led_chan = NULL;
 static rmt_encoder_handle_t led_encoder = NULL;
-static led_state_t current_state = LED_STATE_OFF;
+//static atomic_int current_state = LED_STATE_OFF;
+static _Atomic led_state_t current_state = LED_STATE_OFF;
 static TaskHandle_t led_task_handle = NULL;
 
 typedef struct {
@@ -150,7 +153,7 @@ static void set_pixel(uint8_t r, uint8_t g, uint8_t b)
     rmt_tx_wait_all_done(led_chan, portMAX_DELAY);
 }
 
-static void led_task(void *arg)
+static void led_task(void *_arg)
 {
     int brightness = 0;
     int direction = 5;

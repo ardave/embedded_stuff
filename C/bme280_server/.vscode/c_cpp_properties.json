@@ -4,7 +4,11 @@
         {
             "name": "ESP-IDF",
             "compileCommands": "${workspaceFolder}/build/compile_commands.json",
-            "compilerPath": "${env:HOME}/.espressif/tools/riscv32-esp-elf/esp-15.2.0_20251204/riscv32-esp-elf/bin/riscv32-esp-elf-gcc"
+            "compilerPath": "${env:HOME}/.espressif/tools/riscv32-esp-elf/esp-15.2.0_20251204/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
+            "includePath": [
+                "${workspaceFolder}/build/config",
+                "${env:IDF_PATH}/components/**"
+            ]
         }
     ]
 }
