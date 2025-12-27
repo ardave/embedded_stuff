@@ -18,6 +18,7 @@ static const char *TAG = "wifi_manager";
 static EventGroupHandle_t s_wifi_event_group;
 static esp_timer_handle_t reconnect_timer = NULL;
 static int retry_count = 0;
+static wifi_state_callback_t wifi_state_callback = NULL;
 
 static void reconnect_timer_callback(void *arg)
 {
@@ -28,10 +29,10 @@ static void reconnect_timer_callback(void *arg)
 static void schedule_reconnect(void)
 {
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (max)
-    uint32_t delay_ms = 1000 * (1 << retry_count);
-    if (delay_ms > MAX_RETRY_DELAY_MS) {
-        delay_ms = MAX_RETRY_DELAY_MS;
-    }
+    // Cap shift to avoid overflow (1000 * 2^5 = 32000 > MAX_RETRY_DELAY_MS)
+    uint32_t delay_ms = (retry_count >= 5)
+        ? MAX_RETRY_DELAY_MS
+        : 1000U * (1U << retry_count);
 
     ESP_LOGI(TAG, "Scheduling reconnect in %lu ms (attempt %d)", (unsigned long)delay_ms, retry_count + 1);
     retry_count++;
@@ -56,6 +57,10 @@ static void wifi_sta_event_handler(void *_arg, esp_event_base_t _event_base,
         case WIFI_EVENT_STA_DISCONNECTED: {
             wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)event_data;
             ESP_LOGW(TAG, "Disconnected from AP (reason: %d)", event->reason);
+            // Claude does s_wifi_event_group make this state_callback redundant?
+            if (wifi_state_callback != NULL) {
+                wifi_state_callback(false);
+            }
             led_set_state(LED_STATE_DISCONNECTED);
             xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
             schedule_reconnect();
@@ -72,13 +77,20 @@ static void ip_event_handler(void *_arg, esp_event_base_t _event_base,
         ESP_LOGI(TAG, "Got IP address: " IPSTR, IP2STR(&event->ip_info.ip));
         led_set_state(LED_STATE_CONNECTED);
         retry_count = 0; // Reset backoff on successful connection
+        if (wifi_state_callback != NULL) {
+            wifi_state_callback(true);
+        }
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
 
-esp_err_t wifi_manager_init(void)
+esp_err_t wifi_manager_init(wifi_state_callback_t callback)
 {
+    wifi_state_callback = callback;
     s_wifi_event_group = xEventGroupCreate();
+    if (s_wifi_event_group == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
 
     // Create reconnect timer
     esp_timer_create_args_t timer_args = {
@@ -90,7 +102,10 @@ esp_err_t wifi_manager_init(void)
     // Initialize TCP/IP stack
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
+    esp_netif_t *netif = esp_netif_create_default_wifi_sta();
+    if (netif == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
 
     // Initialize WiFi with default config
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -141,4 +156,8 @@ esp_err_t wifi_manager_wait_connected(void)
     }
 
     return ESP_FAIL;
+}
+
+void wifi_manager_set_callback(wifi_state_callback_t callback) {
+    wifi_state_callback = callback;
 }

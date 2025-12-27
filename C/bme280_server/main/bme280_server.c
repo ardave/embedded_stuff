@@ -7,6 +7,14 @@
 
 static const char *TAG = "bme280_server";
 
+static void on_wifi_state_change(bool connected) {
+    if (connected) {
+        http_server_init();
+    } else {
+        http_server_stop();
+    }
+}
+
 void app_main(void)
 {
     ESP_LOGI(TAG, "BME280 Server starting...");
@@ -23,14 +31,12 @@ void app_main(void)
     ESP_ERROR_CHECK(led_status_init());
 
     // Initialize WiFi and connect
-    ESP_ERROR_CHECK(wifi_manager_init());
+    ESP_ERROR_CHECK(wifi_manager_init(on_wifi_state_change));
 
     // Wait for WiFi connection
     ESP_ERROR_CHECK(wifi_manager_wait_connected());
 
     ESP_LOGI(TAG, "WiFi connected! Ready for BME280 sensor operations.");
-
-    ESP_ERROR_CHECK(http_server_init());
 
     // TODO: Add BME280 sensor reading and HTTP server here
 }

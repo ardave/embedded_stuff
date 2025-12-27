@@ -12,6 +12,11 @@ static esp_err_t hello_handler(httpd_req_t *req) {
 }
 
 esp_err_t http_server_init(void) {
+    if (server != NULL) {
+        ESP_LOGW(TAG, "HTTP server already running");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
     if (httpd_start(&server, &config) != ESP_OK) {
@@ -35,5 +40,13 @@ esp_err_t http_server_init(void) {
     ESP_LOGI(TAG, "Successfully initialized HTTP Server");
 
     return ESP_OK;
+}
+
+void http_server_stop(void) {
+    if (server != NULL) {
+        ESP_LOGI(TAG, "Stopping HTTP Server");
+        httpd_stop(server);
+        server = NULL;
+    }
 }
 
