@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "nvs_flash.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
 #include "bme280_sensor.h"
 #include "data_poster.h"
 #include "led_status.h"
@@ -8,13 +9,7 @@
 
 static const char *TAG = "weather_server";
 
-static void on_wifi_state_change(bool connected) {
-    if (connected) {
-        data_poster_start();
-    } else {
-        data_poster_stop();
-    }
-}
+#define SLEEP_DURATION_US (15 * 60 * 1000000ULL)  // 15 minutes in microseconds
 
 void app_main(void)
 {
@@ -34,14 +29,24 @@ void app_main(void)
     // Initialize BME280 sensor
     ESP_ERROR_CHECK(bme280_sensor_init());
 
-    // Initialize data poster
-    ESP_ERROR_CHECK(data_poster_init(bme280_sensor_get_handle()));
-
-    // Initialize WiFi and connect
-    ESP_ERROR_CHECK(wifi_manager_init(on_wifi_state_change));
+    // Initialize WiFi and connect (no callback needed for run-once model)
+    ESP_ERROR_CHECK(wifi_manager_init(NULL));
 
     // Wait for WiFi connection
     ESP_ERROR_CHECK(wifi_manager_wait_connected());
 
-    ESP_LOGI(TAG, "WiFi connected! Posting sensor data every 15 minutes.");
+    // Initialize data poster and sync time
+    ESP_ERROR_CHECK(data_poster_init(bme280_sensor_get_handle()));
+    data_poster_sync_time();
+
+    // POST sensor reading
+    bool success = post_sensor_reading();
+
+    // Show result on LED (blocking animation)
+    led_status_show_post_result(success);
+
+    // Enter deep sleep
+    ESP_LOGI(TAG, "Entering deep sleep for 15 minutes...");
+    esp_sleep_enable_timer_wakeup(SLEEP_DURATION_US);
+    esp_deep_sleep_start();
 }

@@ -11,12 +11,9 @@
 
 static const char *TAG = "data_poster";
 
-#define POST_INTERVAL_MS (15 * 60 * 1000)
-
 static bme280_handle_t bme280 = NULL;
-static TaskHandle_t poster_task_handle = NULL;
 
-static void init_sntp(void) {
+void data_poster_sync_time(void) {
     ESP_LOGI(TAG, "Initializing SNTP");
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, "pool.ntp.org");
@@ -36,25 +33,25 @@ static void init_sntp(void) {
     }
 }
 
-static void post_sensor_reading(void) {
+bool post_sensor_reading(void) {
     float temperature = 0, pressure = 0, humidity = 0;
 
     esp_err_t ret = bme280_read_temperature(bme280, &temperature);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to read temperature: %s", esp_err_to_name(ret));
-        return;
+        return false;
     }
 
     ret = bme280_read_pressure(bme280, &pressure);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to read pressure: %s", esp_err_to_name(ret));
-        return;
+        return false;
     }
 
     ret = bme280_read_humidity(bme280, &humidity);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to read humidity: %s", esp_err_to_name(ret));
-        return;
+        return false;
     }
 
     float temperature_f = temperature * 9.0f / 5.0f + 32.0f;
@@ -77,16 +74,10 @@ static void post_sensor_reading(void) {
     ret = http_client_post_reading(&reading);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to post sensor reading");
+        return false;
     }
-}
 
-static void poster_task(void *arg) {
-    init_sntp();
-
-    while (true) {
-        post_sensor_reading();
-        vTaskDelay(pdMS_TO_TICKS(POST_INTERVAL_MS));
-    }
+    return true;
 }
 
 esp_err_t data_poster_init(bme280_handle_t sensor) {
@@ -97,24 +88,4 @@ esp_err_t data_poster_init(bme280_handle_t sensor) {
     bme280 = sensor;
     ESP_LOGI(TAG, "Data poster initialized");
     return ESP_OK;
-}
-
-void data_poster_start(void) {
-    if (poster_task_handle != NULL) {
-        ESP_LOGW(TAG, "Data poster already running");
-        return;
-    }
-
-    xTaskCreate(poster_task, "data_poster", 8192, NULL, 5, &poster_task_handle);
-    ESP_LOGI(TAG, "Data poster started (interval: %d minutes)", POST_INTERVAL_MS / 60000);
-}
-
-void data_poster_stop(void) {
-    if (poster_task_handle == NULL) {
-        return;
-    }
-
-    ESP_LOGI(TAG, "Stopping data poster");
-    vTaskDelete(poster_task_handle);
-    poster_task_handle = NULL;
 }

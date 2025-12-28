@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include "esp_err.h"
 
 typedef enum {
@@ -11,3 +12,4 @@ typedef enum {
 
 esp_err_t led_status_init(void);
 void led_set_state(led_state_t state);
+void led_status_show_post_result(bool success);

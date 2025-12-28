@@ -259,3 +259,19 @@ void led_set_state(led_state_t state)
     current_state = state;
     ESP_LOGI(TAG, "LED state changed to %d", state);
 }
+
+void led_status_show_post_result(bool success)
+{
+    uint8_t r = success ? 0 : 255;
+    uint8_t g = success ? 255 : 0;
+
+    ESP_LOGI(TAG, "Showing POST result: %s", success ? "SUCCESS" : "FAILED");
+
+    // 3 quick blinks: on 80ms, off 80ms each = ~480ms total
+    for (int i = 0; i < 3; i++) {
+        set_pixel(r, g, 0);
+        vTaskDelay(pdMS_TO_TICKS(80));
+        set_pixel(0, 0, 0);
+        vTaskDelay(pdMS_TO_TICKS(80));
+    }
+}
