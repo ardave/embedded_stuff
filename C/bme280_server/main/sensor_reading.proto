@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+message SensorReading {
+  float temperature_f = 1;
+  float pressure_inhg = 2;
+  float humidity_percent = 3;
+  int64 timestamp_unix = 4;
+  string device_id = 5;
+}

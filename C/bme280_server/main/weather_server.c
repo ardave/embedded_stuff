@@ -2,7 +2,7 @@
 #include "nvs_flash.h"
 #include "esp_log.h"
 #include "bme280_sensor.h"
-#include "http_server.h"
+#include "data_poster.h"
 #include "led_status.h"
 #include "wifi_manager.h"
 
@@ -10,9 +10,9 @@ static const char *TAG = "weather_server";
 
 static void on_wifi_state_change(bool connected) {
     if (connected) {
-        http_server_init(bme280_sensor_get_handle());
+        data_poster_start();
     } else {
-        http_server_stop();
+        data_poster_stop();
     }
 }
 
@@ -34,11 +34,14 @@ void app_main(void)
     // Initialize BME280 sensor
     ESP_ERROR_CHECK(bme280_sensor_init());
 
+    // Initialize data poster
+    ESP_ERROR_CHECK(data_poster_init(bme280_sensor_get_handle()));
+
     // Initialize WiFi and connect
     ESP_ERROR_CHECK(wifi_manager_init(on_wifi_state_change));
 
     // Wait for WiFi connection
     ESP_ERROR_CHECK(wifi_manager_wait_connected());
 
-    ESP_LOGI(TAG, "WiFi connected! HTTP server serving weather data.");
+    ESP_LOGI(TAG, "WiFi connected! Posting sensor data every 15 minutes.");
 }

@@ -45,9 +45,17 @@ dependencies:
     source:
       type: idf
     version: 6.1.0
+  livekit/nanopb:
+    component_hash: 5b3bd915d2eb2ad1a7bb4a3ca655c40f31bab5f4f48e75ec04e300dc9ab78f4d
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.4.9
 direct_dependencies:
 - espressif/bme280
 - idf
-manifest_hash: 56655df8035b9ce03ff888e9decae7c9c07a8c31eb7c6c080e638f76e687b00e
+- livekit/nanopb
+manifest_hash: e9afaa547847e7c07ec4bfbc8772cd3acc6b80664bba8feb7e520d25fec17bd3
 target: esp32c3
 version: 2.0.0
