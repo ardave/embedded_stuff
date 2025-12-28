@@ -32,9 +32,12 @@ static esp_err_t sensor_handler(httpd_req_t *req) {
         return ESP_FAIL;
     }
 
+    float temperature_f = temperature * 9.0f / 5.0f + 32.0f;
+    float pressure_inhg = pressure * 0.02953f;
+
     snprintf(response, sizeof(response),
-             "Temperature: %.2f C\nPressure: %.2f hPa\nHumidity: %.2f %%\n",
-             temperature, pressure, humidity);
+             "Temperature: %.1f F\nPressure: %.2f inHg\nHumidity: %.1f %%\n",
+             temperature_f, pressure_inhg, humidity);
 
     httpd_resp_set_type(req, "text/plain");
     httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
