@@ -1,13 +1,8 @@
-#include <stdio.h>
-#include "nvs_flash.h"
-#include "esp_log.h"
+#include "bme280_sensor.h"
 #include "i2c_bus.h"
-#include "bme280.h"
-#include "http_server.h"
-#include "led_status.h"
-#include "wifi_manager.h"
+#include "esp_log.h"
 
-static const char *TAG = "bme280_server";
+static const char *TAG = "bme280_sensor";
 
 // I2C configuration for BME280 (Adafruit QT Py ESP32-C3 STEMMA QT connector)
 #define I2C_MASTER_NUM      I2C_NUM_0
@@ -17,7 +12,7 @@ static const char *TAG = "bme280_server";
 
 static bme280_handle_t bme280_sensor = NULL;
 
-static esp_err_t bme280_sensor_init(void) {
+esp_err_t bme280_sensor_init(void) {
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
         .sda_io_num = I2C_MASTER_SDA_IO,
@@ -50,37 +45,6 @@ static esp_err_t bme280_sensor_init(void) {
     return ESP_OK;
 }
 
-static void on_wifi_state_change(bool connected) {
-    if (connected) {
-        http_server_init(bme280_sensor);
-    } else {
-        http_server_stop();
-    }
-}
-
-void app_main(void)
-{
-    ESP_LOGI(TAG, "BME280 Server starting...");
-
-    // Initialize NVS (required for WiFi)
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
-    // Initialize LED status indicator
-    ESP_ERROR_CHECK(led_status_init());
-
-    // Initialize BME280 sensor
-    ESP_ERROR_CHECK(bme280_sensor_init());
-
-    // Initialize WiFi and connect
-    ESP_ERROR_CHECK(wifi_manager_init(on_wifi_state_change));
-
-    // Wait for WiFi connection
-    ESP_ERROR_CHECK(wifi_manager_wait_connected());
-
-    ESP_LOGI(TAG, "WiFi connected! HTTP server serving BME280 sensor data.");
+bme280_handle_t bme280_sensor_get_handle(void) {
+    return bme280_sensor;
 }
