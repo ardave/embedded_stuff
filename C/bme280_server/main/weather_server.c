@@ -34,9 +34,8 @@ void app_main(void)
     ESP_ERROR_CHECK(wifi_manager_init());
     ESP_ERROR_CHECK(wifi_manager_wait_connected());
 
-    // Initialize data poster and sync time
+    // Initialize data poster
     ESP_ERROR_CHECK(data_poster_init(bme280_sensor_get_handle()));
-    data_poster_sync_time();
 
     // POST sensor reading
     bool success = post_sensor_reading();

@@ -1,10 +1,6 @@
 #include <string.h>
 #include <time.h>
-#include <sys/time.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_log.h"
-#include "esp_sntp.h"
 #include "data_poster.h"
 #include "http_client.h"
 #include "sensor_reading.pb.h"
@@ -12,33 +8,6 @@
 static const char *TAG = "data_poster";
 
 static bme280_handle_t bme280 = NULL;
-
-void data_poster_sync_time(void) {
-    ESP_LOGI(TAG, "Initializing SNTP");
-    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    esp_sntp_setservername(0, "pool.ntp.org");
-    esp_sntp_init();
-
-    int retry = 0;
-    const int max_retry = 15;
-    while (esp_sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < max_retry) {
-        ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, max_retry);
-        vTaskDelay(pdMS_TO_TICKS(2000));
-    }
-
-    time_t now;
-    time(&now);
-    struct tm timeinfo;
-    localtime_r(&now, &timeinfo);
-
-    if (retry >= max_retry) {
-        ESP_LOGW(TAG, "Failed to sync time with NTP server");
-    }
-
-    ESP_LOGI(TAG, "Current time: %04d-%02d-%02d %02d:%02d:%02d",
-             timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-             timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-}
 
 bool post_sensor_reading(void) {
     float temperature = 0, pressure = 0, humidity = 0;
