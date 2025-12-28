@@ -26,11 +26,18 @@ void data_poster_sync_time(void) {
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 
+    time_t now;
+    time(&now);
+    struct tm timeinfo;
+    localtime_r(&now, &timeinfo);
+
     if (retry >= max_retry) {
         ESP_LOGW(TAG, "Failed to sync time with NTP server");
-    } else {
-        ESP_LOGI(TAG, "System time synchronized");
     }
+
+    ESP_LOGI(TAG, "Current time: %04d-%02d-%02d %02d:%02d:%02d",
+             timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+             timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
 }
 
 bool post_sensor_reading(void) {

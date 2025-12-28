@@ -1,9 +1,7 @@
 #include "wifi_manager.h"
-#include "led_status.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include <string.h>
@@ -12,60 +10,14 @@ static const char *TAG = "wifi_manager";
 
 #define WIFI_CONNECTED_BIT BIT0
 
-// Maximum backoff delay: 30 seconds
-#define MAX_RETRY_DELAY_MS 30000
-
 static EventGroupHandle_t s_wifi_event_group;
-static esp_timer_handle_t reconnect_timer = NULL;
-static int retry_count = 0;
-static wifi_state_callback_t wifi_state_callback = NULL;
 
-static void reconnect_timer_callback(void *arg)
+static void wifi_event_handler(void *_arg, esp_event_base_t _event_base,
+                               int32_t event_id, void *_event_data)
 {
-    ESP_LOGI(TAG, "Attempting to reconnect...");
-    esp_wifi_connect();
-}
-
-static void schedule_reconnect(void)
-{
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (max)
-    // Cap shift to avoid overflow (1000 * 2^5 = 32000 > MAX_RETRY_DELAY_MS)
-    uint32_t delay_ms = (retry_count >= 5)
-        ? MAX_RETRY_DELAY_MS
-        : 1000U * (1U << retry_count);
-
-    ESP_LOGI(TAG, "Scheduling reconnect in %lu ms (attempt %d)", (unsigned long)delay_ms, retry_count + 1);
-    retry_count++;
-
-    esp_timer_start_once(reconnect_timer, delay_ms * 1000); // Convert to microseconds
-}
-
-static void wifi_sta_event_handler(void *_arg, esp_event_base_t _event_base,
-                                   int32_t event_id, void *event_data)
-{
-    switch (event_id) {
-        case WIFI_EVENT_STA_START:
-            ESP_LOGI(TAG, "WiFi started, connecting...");
-            led_set_state(LED_STATE_CONNECTING);
-            esp_wifi_connect();
-            break;
-
-        case WIFI_EVENT_STA_CONNECTED:
-            ESP_LOGI(TAG, "Connected to AP");
-            break;
-
-        case WIFI_EVENT_STA_DISCONNECTED: {
-            wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)event_data;
-            ESP_LOGW(TAG, "Disconnected from AP (reason: %d)", event->reason);
-            // Claude does s_wifi_event_group make this state_callback redundant?
-            if (wifi_state_callback != NULL) {
-                wifi_state_callback(false);
-            }
-            led_set_state(LED_STATE_DISCONNECTED);
-            xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-            schedule_reconnect();
-            break;
-        }
+    if (event_id == WIFI_EVENT_STA_START) {
+        ESP_LOGI(TAG, "WiFi started, connecting...");
+        esp_wifi_connect();
     }
 }
 
@@ -75,31 +27,17 @@ static void ip_event_handler(void *_arg, esp_event_base_t _event_base,
     if (event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Got IP address: " IPSTR, IP2STR(&event->ip_info.ip));
-        led_set_state(LED_STATE_CONNECTED);
-        retry_count = 0; // Reset backoff on successful connection
-        if (wifi_state_callback != NULL) {
-            wifi_state_callback(true);
-        }
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
 
-esp_err_t wifi_manager_init(wifi_state_callback_t callback)
+esp_err_t wifi_manager_init(void)
 {
-    wifi_state_callback = callback;
     s_wifi_event_group = xEventGroupCreate();
     if (s_wifi_event_group == NULL) {
         return ESP_ERR_NO_MEM;
     }
 
-    // Create reconnect timer
-    esp_timer_create_args_t timer_args = {
-        .callback = reconnect_timer_callback,
-        .name = "wifi_reconnect",
-    };
-    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &reconnect_timer));
-
-    // Initialize TCP/IP stack
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_t *netif = esp_netif_create_default_wifi_sta();
@@ -107,25 +45,20 @@ esp_err_t wifi_manager_init(wifi_state_callback_t callback)
         return ESP_ERR_NO_MEM;
     }
 
-    // Initialize WiFi with default config
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    // Register event handlers
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
-        WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_sta_event_handler, NULL, NULL));
+        WIFI_EVENT, WIFI_EVENT_STA_START, &wifi_event_handler, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, NULL, NULL));
 
-    // Configure WiFi
     wifi_config_t wifi_config = {
         .sta = {
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
             .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
         },
     };
-
-    // Copy SSID and password from compile-time defines
     strncpy((char *)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid) - 1);
     strncpy((char *)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password) - 1);
 
@@ -135,7 +68,6 @@ esp_err_t wifi_manager_init(wifi_state_callback_t callback)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "WiFi manager initialized");
     return ESP_OK;
 }
 
@@ -151,13 +83,9 @@ esp_err_t wifi_manager_wait_connected(void)
     );
 
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "WiFi connected successfully");
+        ESP_LOGI(TAG, "WiFi connected");
         return ESP_OK;
     }
 
     return ESP_FAIL;
-}
-
-void wifi_manager_set_callback(wifi_state_callback_t callback) {
-    wifi_state_callback = callback;
 }

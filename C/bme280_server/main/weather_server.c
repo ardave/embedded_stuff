@@ -23,16 +23,15 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    // Initialize LED status indicator
+    // Initialize LED and show yellow while connecting
     ESP_ERROR_CHECK(led_status_init());
+    led_set_color(255, 180, 0);  // Yellow
 
     // Initialize BME280 sensor
     ESP_ERROR_CHECK(bme280_sensor_init());
 
-    // Initialize WiFi and connect (no callback needed for run-once model)
-    ESP_ERROR_CHECK(wifi_manager_init(NULL));
-
-    // Wait for WiFi connection
+    // Connect to WiFi
+    ESP_ERROR_CHECK(wifi_manager_init());
     ESP_ERROR_CHECK(wifi_manager_wait_connected());
 
     // Initialize data poster and sync time

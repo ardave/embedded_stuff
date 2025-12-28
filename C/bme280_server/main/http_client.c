@@ -22,10 +22,12 @@ esp_err_t http_client_post_reading(SensorReading *reading) {
     size_t message_length = stream.bytes_written;
     ESP_LOGI(TAG, "Encoded protobuf message: %zu bytes", message_length);
 
+    // WARNING: Skipping cert verification for testing - add proper cert for production
     esp_http_client_config_t config = {
         .url = API_ENDPOINT,
         .method = HTTP_METHOD_POST,
         .timeout_ms = 10000,
+        .skip_cert_common_name_check = true,
     };
 
     int backoff_ms = INITIAL_BACKOFF_MS;

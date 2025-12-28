@@ -1,5 +1,3 @@
-#include <stdatomic.h>
-#include <string.h>
 #include "led_status.h"
 #include "driver/rmt_tx.h"
 #include "driver/rmt_encoder.h"
@@ -7,7 +5,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-
 
 static const char *TAG = "led_status";
 
@@ -20,9 +17,6 @@ static const char *TAG = "led_status";
 
 static rmt_channel_handle_t led_chan = NULL;
 static rmt_encoder_handle_t led_encoder = NULL;
-//static atomic_int current_state = LED_STATE_OFF;
-static _Atomic led_state_t current_state = LED_STATE_OFF;
-static TaskHandle_t led_task_handle = NULL;
 
 typedef struct {
     rmt_encoder_t base;
@@ -43,7 +37,7 @@ static size_t ws2812_encode(rmt_encoder_t *encoder, rmt_channel_handle_t channel
     size_t encoded_symbols = 0;
 
     switch (ws2812_encoder->state) {
-    case 0: // Send RGB data
+    case 0:
         encoded_symbols += bytes_encoder->encode(bytes_encoder, channel, primary_data, data_size, &session_state);
         if (session_state & RMT_ENCODING_COMPLETE) {
             ws2812_encoder->state = 1;
@@ -53,7 +47,7 @@ static size_t ws2812_encode(rmt_encoder_t *encoder, rmt_channel_handle_t channel
             goto out;
         }
         // fall-through
-    case 1: // Send reset code
+    case 1:
         encoded_symbols += copy_encoder->encode(copy_encoder, channel, &ws2812_encoder->reset_code,
                                                  sizeof(ws2812_encoder->reset_code), &session_state);
         if (session_state & RMT_ENCODING_COMPLETE) {
@@ -99,34 +93,26 @@ static esp_err_t create_ws2812_encoder(rmt_encoder_handle_t *ret_encoder)
     ws2812_encoder->base.reset = ws2812_encoder_reset;
     ws2812_encoder->base.del = ws2812_encoder_del;
 
-    // Create bytes encoder for RGB data
-    // At 10MHz (RMT_RESOLUTION_HZ), 1 tick = 100ns
-    // T0H = 350ns = 3.5 ticks ~= 4
-    // T0L = 800ns = 8 ticks
-    // T1H = 700ns = 7 ticks
-    // T1L = 600ns = 6 ticks
     rmt_bytes_encoder_config_t bytes_encoder_config = {
         .bit0 = {
             .level0 = 1,
-            .duration0 = 4,  // ~400ns high
+            .duration0 = 4,
             .level1 = 0,
-            .duration1 = 8,  // ~800ns low
+            .duration1 = 8,
         },
         .bit1 = {
             .level0 = 1,
-            .duration0 = 7,  // ~700ns high
+            .duration0 = 7,
             .level1 = 0,
-            .duration1 = 6,  // ~600ns low
+            .duration1 = 6,
         },
         .flags.msb_first = 1,
     };
     ESP_ERROR_CHECK(rmt_new_bytes_encoder(&bytes_encoder_config, &ws2812_encoder->bytes_encoder));
 
-    // Create copy encoder for reset signal
     rmt_copy_encoder_config_t copy_encoder_config = {};
     ESP_ERROR_CHECK(rmt_new_copy_encoder(&copy_encoder_config, &ws2812_encoder->copy_encoder));
 
-    // Reset code (low for 280us = 2800 ticks at 10MHz)
     ws2812_encoder->reset_code = (rmt_symbol_word_t) {
         .level0 = 0,
         .duration0 = 2800,
@@ -138,7 +124,7 @@ static esp_err_t create_ws2812_encoder(rmt_encoder_handle_t *ret_encoder)
     return ESP_OK;
 }
 
-static void set_pixel(uint8_t r, uint8_t g, uint8_t b)
+void led_set_color(uint8_t r, uint8_t g, uint8_t b)
 {
     if (!led_chan || !led_encoder) return;
 
@@ -153,56 +139,8 @@ static void set_pixel(uint8_t r, uint8_t g, uint8_t b)
     rmt_tx_wait_all_done(led_chan, portMAX_DELAY);
 }
 
-static void led_task(void *_arg)
-{
-    int brightness = 0;
-    int direction = 5;
-    int blink_state = 0;
-
-    while (1) {
-        switch (current_state) {
-            case LED_STATE_OFF:
-                set_pixel(0, 0, 0);
-                vTaskDelay(pdMS_TO_TICKS(100));
-                break;
-
-            case LED_STATE_CONNECTING:
-                // Yellow pulsing
-                brightness += direction;
-                if (brightness >= 255) {
-                    brightness = 255;
-                    direction = -5;
-                } else if (brightness <= 20) {
-                    brightness = 20;
-                    direction = 5;
-                }
-                set_pixel(brightness, brightness * 180 / 255, 0);
-                vTaskDelay(pdMS_TO_TICKS(20));
-                break;
-
-            case LED_STATE_CONNECTED:
-                // Green solid
-                set_pixel(0, 255, 0);
-                vTaskDelay(pdMS_TO_TICKS(100));
-                break;
-
-            case LED_STATE_DISCONNECTED:
-                // Red blinking
-                blink_state = !blink_state;
-                if (blink_state) {
-                    set_pixel(255, 0, 0);
-                } else {
-                    set_pixel(0, 0, 0);
-                }
-                vTaskDelay(pdMS_TO_TICKS(250));
-                break;
-        }
-    }
-}
-
 esp_err_t led_status_init(void)
 {
-    // Enable NeoPixel power (GPIO8 must be HIGH)
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << NEOPIXEL_POWER_GPIO),
         .mode = GPIO_MODE_OUTPUT,
@@ -213,10 +151,8 @@ esp_err_t led_status_init(void)
     gpio_config(&io_conf);
     gpio_set_level(NEOPIXEL_POWER_GPIO, 1);
 
-    // Give power time to stabilize
     vTaskDelay(pdMS_TO_TICKS(10));
 
-    // Configure RMT TX channel
     rmt_tx_channel_config_t tx_chan_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .gpio_num = NEOPIXEL_DATA_GPIO,
@@ -230,34 +166,22 @@ esp_err_t led_status_init(void)
         return ret;
     }
 
-    // Create WS2812 encoder
     ret = create_ws2812_encoder(&led_encoder);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to create WS2812 encoder: %s", esp_err_to_name(ret));
         return ret;
     }
 
-    // Enable channel
     ret = rmt_enable(led_chan);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to enable RMT channel: %s", esp_err_to_name(ret));
         return ret;
     }
 
-    // Clear LED
-    set_pixel(0, 0, 0);
+    led_set_color(0, 0, 0);
 
-    // Create LED animation task
-    xTaskCreate(led_task, "led_task", 2048, NULL, 5, &led_task_handle);
-
-    ESP_LOGI(TAG, "LED status initialized");
+    ESP_LOGI(TAG, "LED initialized");
     return ESP_OK;
-}
-
-void led_set_state(led_state_t state)
-{
-    current_state = state;
-    ESP_LOGI(TAG, "LED state changed to %d", state);
 }
 
 void led_status_show_post_result(bool success)
@@ -265,13 +189,12 @@ void led_status_show_post_result(bool success)
     uint8_t r = success ? 0 : 255;
     uint8_t g = success ? 255 : 0;
 
-    ESP_LOGI(TAG, "Showing POST result: %s", success ? "SUCCESS" : "FAILED");
+    ESP_LOGI(TAG, "POST %s", success ? "SUCCESS" : "FAILED");
 
-    // 3 quick blinks: on 80ms, off 80ms each = ~480ms total
     for (int i = 0; i < 3; i++) {
-        set_pixel(r, g, 0);
+        led_set_color(r, g, 0);
         vTaskDelay(pdMS_TO_TICKS(80));
-        set_pixel(0, 0, 0);
+        led_set_color(0, 0, 0);
         vTaskDelay(pdMS_TO_TICKS(80));
     }
 }
