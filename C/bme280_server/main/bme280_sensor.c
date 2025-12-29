@@ -11,8 +11,10 @@ static const char *TAG = "bme280_sensor";
 #define I2C_MASTER_FREQ_HZ  100000
 
 static bme280_handle_t bme280_sensor = NULL;
+static i2c_bus_handle_t i2c_bus = NULL;
 
 esp_err_t bme280_sensor_init(void) {
+    esp_err_t ret = ESP_FAIL;
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
         .sda_io_num = I2C_MASTER_SDA_IO,
@@ -22,7 +24,7 @@ esp_err_t bme280_sensor_init(void) {
         .master.clk_speed = I2C_MASTER_FREQ_HZ,
     };
 
-    i2c_bus_handle_t i2c_bus = i2c_bus_create(I2C_MASTER_NUM, &conf);
+    i2c_bus = i2c_bus_create(I2C_MASTER_NUM, &conf);
     if (i2c_bus == NULL) {
         ESP_LOGE(TAG, "Failed to create I2C bus");
         return ESP_FAIL;
@@ -32,17 +34,23 @@ esp_err_t bme280_sensor_init(void) {
     bme280_sensor = bme280_create(i2c_bus, 0x77);
     if (bme280_sensor == NULL) {
         ESP_LOGE(TAG, "Failed to create BME280 handle");
-        return ESP_FAIL;
+        goto err_delete_bus;
     }
 
-    esp_err_t ret = bme280_default_init(bme280_sensor);
+    ret = bme280_default_init(bme280_sensor);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize BME280: %s", esp_err_to_name(ret));
-        return ret;
+        goto err_delete_sensor;
     }
 
     ESP_LOGI(TAG, "BME280 sensor initialized successfully");
     return ESP_OK;
+
+err_delete_sensor:
+    bme280_delete(&bme280_sensor);
+err_delete_bus:
+    i2c_bus_delete(&i2c_bus);
+    return ret;
 }
 
 bme280_handle_t bme280_sensor_get_handle(void) {

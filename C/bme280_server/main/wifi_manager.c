@@ -9,15 +9,31 @@
 static const char *TAG = "wifi_manager";
 
 #define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT BIT1
+#define WIFI_MAXIMUM_RETRY 5
 
 static EventGroupHandle_t s_wifi_event_group;
+static int s_retry_num = 0;
 
 static void wifi_event_handler(void *_arg, esp_event_base_t _event_base,
-                               int32_t event_id, void *_event_data)
+                               int32_t event_id, void *event_data)
 {
     if (event_id == WIFI_EVENT_STA_START) {
         ESP_LOGI(TAG, "WiFi started, connecting...");
         esp_wifi_connect();
+    } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        wifi_event_sta_disconnected_t *disconn = (wifi_event_sta_disconnected_t *)event_data;
+        ESP_LOGW(TAG, "Disconnected, reason: %d", disconn->reason);
+
+        if (s_retry_num < WIFI_MAXIMUM_RETRY) {
+            s_retry_num++;
+            ESP_LOGI(TAG, "Retrying connection (%d/%d)...", s_retry_num, WIFI_MAXIMUM_RETRY);
+            esp_wifi_connect();
+        } else {
+            ESP_LOGE(TAG, "Failed to connect after %d attempts", WIFI_MAXIMUM_RETRY);
+            // Signal failure so main code can go back to sleep:
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        }
     }
 }
 
@@ -51,6 +67,8 @@ esp_err_t wifi_manager_init(void)
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         WIFI_EVENT, WIFI_EVENT_STA_START, &wifi_event_handler, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
+        WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &wifi_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(
         IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, NULL, NULL));
 
     wifi_config_t wifi_config = {
@@ -76,10 +94,10 @@ esp_err_t wifi_manager_wait_connected(void)
     ESP_LOGI(TAG, "Waiting for WiFi connection...");
     EventBits_t bits = xEventGroupWaitBits(
         s_wifi_event_group,
-        WIFI_CONNECTED_BIT,
+        WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
         pdFALSE,
         pdFALSE,
-        portMAX_DELAY
+        pdMS_TO_TICKS(30000) // 30s timeout instead of forever
     );
 
     if (bits & WIFI_CONNECTED_BIT) {
