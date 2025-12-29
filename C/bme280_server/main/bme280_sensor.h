@@ -1,5 +1,4 @@
-#ifndef BME280_SENSOR_H
-#define BME280_SENSOR_H
+#pragma once
 
 #include "esp_err.h"
 #include "bme280.h"
@@ -18,4 +17,3 @@ esp_err_t bme280_sensor_init(void);
  */
 bme280_handle_t bme280_sensor_get_handle(void);
 
-#endif // BME280_SENSOR_H
