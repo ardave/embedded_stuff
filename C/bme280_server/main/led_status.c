@@ -210,7 +210,7 @@ esp_err_t led_status_init(void)
     return ESP_OK;
 
 err_del_encoder:
-    rmt_encoder_del(led_encoder);
+    rmt_del_encoder(led_encoder);
     led_encoder = NULL;
 err_del_channel:
     rmt_del_channel(led_chan);

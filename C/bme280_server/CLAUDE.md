@@ -47,8 +47,6 @@ The firmware reads BME280 sensor data, POSTs it to an HTTP endpoint as a protobu
 - `sensor_reading.pb.c/.h` are pre-generated nanopb files (regenerate with nanopb if proto changes)
 
 **Coding Guidelines**
-- Please do not concern with resource cleanup resulting from any error in any code path that is executed within
-an `ESP_ERROR_CHECK` context, given that a returned esp_err_t will abort the program execution altogether.
 
 ## Hardware
 

@@ -31,6 +31,7 @@ static void wifi_event_handler(void *_arg, esp_event_base_t _event_base,
             esp_wifi_connect();
         } else {
             ESP_LOGE(TAG, "Failed to connect after %d attempts", WIFI_MAXIMUM_RETRY);
+            s_retry_num = 0; // even though we're about to reboot
             // Signal failure so main code can go back to sleep:
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
@@ -66,8 +67,10 @@ esp_err_t wifi_manager_init(void)
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         WIFI_EVENT, WIFI_EVENT_STA_START, &wifi_event_handler, NULL, NULL));
+
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &wifi_event_handler, NULL, NULL));
+
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, NULL, NULL));
 
@@ -77,8 +80,8 @@ esp_err_t wifi_manager_init(void)
             .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
         },
     };
-    strncpy((char *)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid) - 1);
-    strncpy((char *)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password) - 1);
+    strlcpy((char *)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid));
+    strlcpy((char *)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password));
 
     ESP_LOGI(TAG, "Connecting to SSID: %s", wifi_config.sta.ssid);
 

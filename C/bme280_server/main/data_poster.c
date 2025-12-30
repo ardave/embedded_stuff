@@ -41,7 +41,7 @@ bool post_sensor_reading(void) {
     reading.temperature_f = temperature_f;
     reading.pressure_inhg = pressure_inhg;
     reading.humidity_percent = humidity;
-    strncpy(reading.device_id, DEVICE_ID, sizeof(reading.device_id) - 1);
+    strlcpy(reading.device_id, DEVICE_ID, sizeof(reading.device_id));
 
     ESP_LOGI(TAG, "Posting reading: T=%.1fF, P=%.2finHg, H=%.1f%%, id=%s",
              reading.temperature_f, reading.pressure_inhg, reading.humidity_percent,
