@@ -84,6 +84,7 @@ static esp_err_t ws2812_encoder_del(rmt_encoder_t *encoder)
 
 static esp_err_t create_ws2812_encoder(rmt_encoder_handle_t *ret_encoder)
 {
+    esp_err_t ret;
     ws2812_encoder_t *ws2812_encoder = calloc(1, sizeof(ws2812_encoder_t));
     if (!ws2812_encoder) {
         return ESP_ERR_NO_MEM;
@@ -108,10 +109,18 @@ static esp_err_t create_ws2812_encoder(rmt_encoder_handle_t *ret_encoder)
         },
         .flags.msb_first = 1,
     };
-    ESP_ERROR_CHECK(rmt_new_bytes_encoder(&bytes_encoder_config, &ws2812_encoder->bytes_encoder));
+    ret = rmt_new_bytes_encoder(&bytes_encoder_config, &ws2812_encoder->bytes_encoder);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create bytes encoder: %s", esp_err_to_name(ret));
+        goto err_free_encoder;
+    }
 
     rmt_copy_encoder_config_t copy_encoder_config = {};
-    ESP_ERROR_CHECK(rmt_new_copy_encoder(&copy_encoder_config, &ws2812_encoder->copy_encoder));
+    ret = rmt_new_copy_encoder(&copy_encoder_config, &ws2812_encoder->copy_encoder);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create copy encoder: %s", esp_err_to_name(ret));
+        goto err_del_bytes_encoder;
+    }
 
     ws2812_encoder->reset_code = (rmt_symbol_word_t) {
         .level0 = 0,
@@ -122,6 +131,12 @@ static esp_err_t create_ws2812_encoder(rmt_encoder_handle_t *ret_encoder)
 
     *ret_encoder = &ws2812_encoder->base;
     return ESP_OK;
+
+err_del_bytes_encoder:
+    rmt_del_encoder(ws2812_encoder->bytes_encoder);
+err_free_encoder:
+    free(ws2812_encoder);
+    return ret;
 }
 
 void led_set_color(uint8_t r, uint8_t g, uint8_t b)
@@ -141,6 +156,8 @@ void led_set_color(uint8_t r, uint8_t g, uint8_t b)
 
 esp_err_t led_status_init(void)
 {
+    esp_err_t ret;
+
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << NEOPIXEL_POWER_GPIO),
         .mode = GPIO_MODE_OUTPUT,
@@ -148,8 +165,17 @@ esp_err_t led_status_init(void)
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    gpio_config(&io_conf);
-    gpio_set_level(NEOPIXEL_POWER_GPIO, 1);
+    ret = gpio_config(&io_conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set GPIO config: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = gpio_set_level(NEOPIXEL_POWER_GPIO, 1);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set GPIO level: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     vTaskDelay(pdMS_TO_TICKS(10));
 
@@ -160,7 +186,7 @@ esp_err_t led_status_init(void)
         .resolution_hz = RMT_RESOLUTION_HZ,
         .trans_queue_depth = 4,
     };
-    esp_err_t ret = rmt_new_tx_channel(&tx_chan_config, &led_chan);
+    ret = rmt_new_tx_channel(&tx_chan_config, &led_chan);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to create RMT TX channel: %s", esp_err_to_name(ret));
         return ret;
@@ -169,19 +195,27 @@ esp_err_t led_status_init(void)
     ret = create_ws2812_encoder(&led_encoder);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to create WS2812 encoder: %s", esp_err_to_name(ret));
-        return ret;
+        goto err_del_channel;
     }
 
     ret = rmt_enable(led_chan);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to enable RMT channel: %s", esp_err_to_name(ret));
-        return ret;
+        goto err_del_encoder;
     }
 
     led_set_color(0, 0, 0);
 
     ESP_LOGI(TAG, "LED initialized");
     return ESP_OK;
+
+err_del_encoder:
+    rmt_encoder_del(led_encoder);
+    led_encoder = NULL;
+err_del_channel:
+    rmt_del_channel(led_chan);
+    led_chan = NULL;
+    return ret;
 }
 
 void led_status_show_post_result(bool success)
