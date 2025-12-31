@@ -11,6 +11,8 @@ static const char *TAG = "weather_server";
 
 #define SLEEP_DURATION_US (15 * 60 * 1000000ULL)  // 15 minutes in microseconds
 
+void app_main(void);
+
 void app_main(void)
 {
     ESP_LOGI(TAG, "Weather Server starting...");

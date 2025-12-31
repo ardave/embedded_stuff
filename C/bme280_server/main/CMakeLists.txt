@@ -44,3 +44,18 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
     API_ENDPOINT="${API_ENDPOINT}"
     DEVICE_ID="${DEVICE_ID}"
 )
+
+# Extra warnings for better error detection (only applies to main component)
+target_compile_options(${COMPONENT_LIB} PRIVATE
+#    -Wall                    # Standard warnings
+#    -Wextra                  # Additional useful warnings
+    -Wshadow                 # Warn when variable shadows another
+#    -Wdouble-promotion       # Warn on implicit float->double
+    -Wformat=2               # Strict printf/scanf format checking
+    -Wconversion             # Warn on implicit type conversions
+    -Wno-sign-conversion     # Suppress sign conversion noise
+    -Wnull-dereference       # Warn on potential null pointer dereference
+    -Wuninitialized          # Warn on uninitialized variable use
+    -Wstrict-prototypes      # Require full function prototypes
+    -Wmissing-prototypes     # Warn if function lacks prototype
+)

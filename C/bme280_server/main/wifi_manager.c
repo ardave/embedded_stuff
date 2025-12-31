@@ -57,7 +57,7 @@ esp_err_t wifi_manager_init(void)
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_t *netif = esp_netif_create_default_wifi_sta();
+    const esp_netif_t *netif = esp_netif_create_default_wifi_sta();
     if (netif == NULL) {
         return ESP_ERR_NO_MEM;
     }
