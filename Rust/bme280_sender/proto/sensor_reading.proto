@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package sensor;
+
+message SensorReading {
+    float temperature_f = 1;
+    float pressure_inhg = 2;
+    float humidity_percent = 3;
+    string device_id = 4;
+}
