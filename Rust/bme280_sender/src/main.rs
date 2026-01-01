@@ -211,6 +211,7 @@ fn post_sensor_reading(reading: &SensorReading) -> Result<bool> {
 fn do_http_post(body: &[u8]) -> Result<u16> {
     let config = HttpConfig {
         timeout: Some(Duration::from_secs(10)),
+        crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
         ..Default::default()
     };
 
