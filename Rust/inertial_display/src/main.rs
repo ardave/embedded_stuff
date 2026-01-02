@@ -81,16 +81,16 @@ impl<'a> Sh1107Display<'a> {
     }
 
     fn init(&mut self) -> Result<(), EspError> {
-        // SH1107 initialization sequence for 128x128
+        // SH1107 initialization sequence for Adafruit 128x128 OLED
         self.send_commands(&[
             0xAE,       // Display off
             0xDC, 0x00, // Set display start line to 0
-            0x81, 0x4F, // Set contrast (0x4F is mid-range)
+            0x81, 0x2F, // Set contrast
             0x20,       // Set memory addressing mode (page addressing)
-            0xA0,       // Set segment re-map (normal)
+            0xA0,       // Set segment re-map (column address 0 = SEG0)
             0xC0,       // Set COM output scan direction (normal)
             0xA8, 0x7F, // Set multiplex ratio (128)
-            0xD3, 0x60, // Set display offset (96 for 128x128)
+            0xD3, 0x00, // Set display offset to 0
             0xD5, 0x51, // Set display clock divide ratio
             0xD9, 0x22, // Set pre-charge period
             0xDB, 0x35, // Set VCOMH deselect level
@@ -109,17 +109,16 @@ impl<'a> Sh1107Display<'a> {
     }
 
     fn flush(&mut self) -> Result<(), EspError> {
-        // SH1107 uses page addressing mode
-        // Each page is 8 pixels high, so 128/8 = 16 pages
+        // SH1107 128x128: 16 pages (vertical strips), 128 rows each
         for page in 0..16u8 {
-            // Set page address
+            // Set page address (0xB0-0xBF for pages 0-15)
             self.send_command(0xB0 | page)?;
-            // Set column address to 0 (lower nibble)
+            // Set row address to 0 (lower nibble)
             self.send_command(0x00)?;
-            // Set column address to 0 (upper nibble)
+            // Set row address to 0 (upper nibble)
             self.send_command(0x10)?;
 
-            // Send page data (128 bytes for 128 columns)
+            // Send page data (128 bytes for 128 rows)
             let start = (page as usize) * 128;
             let end = start + 128;
 
@@ -137,12 +136,13 @@ impl<'a> Sh1107Display<'a> {
             return;
         }
 
-        // SH1107 memory layout: each byte is 8 vertical pixels
-        // Page number = y / 8
-        // Bit position = y % 8
-        let page = y / 8;
-        let bit = y % 8;
-        let index = (page * DISPLAY_WIDTH + x) as usize;
+        // SH1107 128x128 memory layout for Adafruit display:
+        // The display is rotated - pages are vertical columns
+        // Flip X to correct mirror effect
+        let x = (DISPLAY_WIDTH - 1) - x;
+        let page = x / 8;
+        let bit = x % 8;
+        let index = (page * DISPLAY_HEIGHT + y) as usize;
 
         if on {
             self.buffer[index] |= 1 << bit;
