@@ -261,16 +261,6 @@ fn main() {
 
     log::info!("I2C initialized");
 
-    // Scan I2C bus to find connected devices
-    log::info!("Scanning I2C bus...");
-    for addr in 1..127 {
-        let mut buf = [0u8; 1];
-        if i2c.read(addr, &mut buf, 10).is_ok() {
-            log::info!("Found device at address 0x{:02X}", addr);
-        }
-    }
-    log::info!("I2C scan complete");
-
     // Create display driver (which owns the I2C bus)
     let mut display = Sh1107Display::new(i2c);
 
