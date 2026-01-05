@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
+
+# ROS2 build artifacts
+build/
+install/
+log/

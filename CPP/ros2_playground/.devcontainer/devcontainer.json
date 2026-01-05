@@ -1,0 +1,35 @@
+{
+    "name": "ROS 2 Jazzy",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+                "ms-iot.vscode-ros",
+                "twxs.cmake",
+                "ms-python.python"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
+                "C_Cpp.default.includePath": [
+                    "/opt/ros/jazzy/include/**",
+                    "${workspaceFolder}/**"
+                ]
+            }
+        }
+    },
+    "containerEnv": {
+        "ROS_DISTRO": "jazzy",
+        "ROS_LOCALHOST_ONLY": "1"
+    },
+    "postCreateCommand": "echo 'source /opt/ros/jazzy/setup.bash' >> ~/.bashrc",
+    "runArgs": [
+        "--network=host"
+    ]
+}

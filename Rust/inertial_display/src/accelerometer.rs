@@ -102,8 +102,8 @@ pub fn determine_motion_state(accel: &AccelData) -> MotionState {
     // Y-axis: left/right
     // Board orientation: laying flat, X pointing forward direction of travel
 
-    let abs_x = accel.x.0.abs();
-    let abs_y = accel.y.0.abs();
+    let abs_x = accel.x.0.saturating_abs();
+    let abs_y = accel.y.0.saturating_abs();
 
     // Check if any significant motion is detected
     if abs_x < ACCEL_THRESHOLD && abs_y < ACCEL_THRESHOLD {
