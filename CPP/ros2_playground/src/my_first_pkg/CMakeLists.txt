@@ -8,26 +8,37 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
-add_executable(my_node src/my_node.cpp)
-target_include_directories(my_node PUBLIC
+# Build as shared library for component loading
+add_library(my_first_pkg_components SHARED
+  src/data_logger.cpp
+  src/camera_node.cpp
+  src/gps_node.cpp)
+target_include_directories(my_first_pkg_components PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
-target_compile_features(my_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
-ament_target_dependencies(my_node rclcpp std_msgs)
+target_compile_features(my_first_pkg_components PUBLIC c_std_99 cxx_std_17)
+ament_target_dependencies(my_first_pkg_components rclcpp rclcpp_components std_msgs sensor_msgs)
 
-install(TARGETS my_node
-  DESTINATION lib/${PROJECT_NAME})
+# Register the components
+rclcpp_components_register_nodes(my_first_pkg_components "DataLogger")
+rclcpp_components_register_nodes(my_first_pkg_components "CameraNode")
+rclcpp_components_register_nodes(my_first_pkg_components "GPSNode")
+
+install(TARGETS my_first_pkg_components
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)
+
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
   set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
