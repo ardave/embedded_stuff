@@ -11,6 +11,8 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(cv_bridge REQUIRED)
 
 # Build as shared library for component loading
 add_library(my_first_pkg_components SHARED
@@ -21,7 +23,7 @@ target_include_directories(my_first_pkg_components PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 target_compile_features(my_first_pkg_components PUBLIC c_std_99 cxx_std_17)
-ament_target_dependencies(my_first_pkg_components rclcpp rclcpp_components std_msgs sensor_msgs)
+ament_target_dependencies(my_first_pkg_components rclcpp rclcpp_components std_msgs sensor_msgs OpenCV cv_bridge)
 
 # Register the components
 rclcpp_components_register_nodes(my_first_pkg_components "DataLogger")

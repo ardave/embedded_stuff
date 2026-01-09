@@ -1,7 +1,20 @@
+#include <optional>
+
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_components/register_node_macro.hpp"
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
 #include "sensor_msgs/msg/image.hpp"
+
+struct TimestampedGpsFix {
+  sensor_msgs::msg::NavSatFix fix;
+  rclcpp::Time time;
+
+  TimestampedGpsFix() = delete;
+
+  TimestampedGpsFix(sensor_msgs::msg::NavSatFix f, rclcpp::Time t)
+    : fix(std::move(f)), time(t) {}
+
+};
 
 class DataLogger : public rclcpp::Node
 {
@@ -15,12 +28,17 @@ public:
     image_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
       "camera/image_raw", 10, std::bind(&DataLogger::image_callback, this, std::placeholders::_1));
 
+    this->declare_parameter<std::string>("serial_port", "");
+
     RCLCPP_INFO(this->get_logger(), "DataLogger component started");
   }
 
 private:
   void gps_callback(const sensor_msgs::msg::NavSatFix::SharedPtr msg)
   {
+    auto new_fix = TimestampedGpsFix(*msg, this->now());
+    timestamped_gps_fix_ = std::make_optional(new_fix);
+
     RCLCPP_INFO(this->get_logger(), "Received GPS: lat=%.4f, lon=%.4f, alt=%.2f",
                 msg->latitude, msg->longitude, msg->altitude);
   }
@@ -35,6 +53,13 @@ private:
 
   rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr gps_subscription_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_subscription_;
+
+  std::optional<sensor_msgs::msg::NavSatFix> latest_gps_fix_;
+  rclcpp::Time latest_gps_time_;
+
+  std::optional<TimestampedGpsFix> timestamped_gps_fix_;
 };
 
 RCLCPP_COMPONENTS_REGISTER_NODE(DataLogger)
+
+
