@@ -10,11 +10,14 @@
 #include <sstream>
 #include <cmath>
 
+using sensor_msgs::msg::NavSatFix;
+using sensor_msgs::msg::NavSatStatus;
+
 class GPSNode : public rclcpp::Node
 {
 public:
   explicit GPSNode(const rclcpp::NodeOptions & options)
-  : Node("gps_node", options), use_mock_(false), mock_tick_(0), serial_fd_(-1)
+  : Node("gps_node", options), use_mock_(false), mock_tick_(0), serial_fd_(std::nullopt)
   {
     // Declare parameters
     this->declare_parameter<std::string>("serial_port", "");
@@ -42,7 +45,7 @@ public:
       use_mock_ = true;
     }
 
-    publisher_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gps_data", 10);
+    publisher_ = this->create_publisher<NavSatFix>("gps_data", 10);
 
     timer_ = this->create_wall_timer(
       std::chrono::seconds(1),
@@ -53,22 +56,26 @@ public:
 
   ~GPSNode()
   {
-    if (serial_fd_ >= 0) {
-      close(serial_fd_);
+    if (serial_fd_) {
+      close(serial_fd_.value());
     }
+
+    // if (serial_fd_ >= 0) {
+    //   close(serial_fd_);
+    // }
   }
 
 private:
-  rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr publisher_;
+  rclcpp::Publisher<NavSatFix>::SharedPtr publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
   bool use_mock_;
   uint32_t mock_tick_;
-  int serial_fd_;
+  std::optional<int> serial_fd_; // Serial port file descriptor
   std::string nmea_buffer_;
 
   void publish_gps_data()
   {
-    auto msg = sensor_msgs::msg::NavSatFix();
+    auto msg = NavSatFix();
     msg.header.stamp = this->now();
     msg.header.frame_id = "gps_frame";
 
@@ -81,7 +88,7 @@ private:
       msg.latitude = base_lat + radius * std::sin(mock_tick_ * 0.1);
       msg.longitude = base_lon + radius * std::cos(mock_tick_ * 0.1);
       msg.altitude = 10.0 + std::sin(mock_tick_ * 0.05) * 2.0;  // slight altitude variation
-      msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_FIX;
+      msg.status.status = NavSatStatus::STATUS_FIX;
       mock_tick_++;
 
       RCLCPP_INFO(this->get_logger(), "Publishing mock GPS: lat=%.6f, lon=%.6f",
@@ -130,12 +137,12 @@ private:
     return "";
   }
 
-  int open_serial_port(const std::string & port, int baud_rate)
+  std::optional<int> open_serial_port(const std::string & port, int baud_rate)
   {
     int fd = open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd < 0) {
       RCLCPP_ERROR(this->get_logger(), "Failed to open %s: %s", port.c_str(), strerror(errno));
-      return -1;
+      return std::nullopt;
     }
 
     struct termios tty;
@@ -179,10 +186,14 @@ private:
     return fd;
   }
 
-  bool read_gps_data(sensor_msgs::msg::NavSatFix & msg)
+  bool read_gps_data(NavSatFix & msg)
   {
+    if (!serial_fd_) {
+      return false;
+    }
+
     char buf[256];
-    ssize_t n = read(serial_fd_, buf, sizeof(buf) - 1);
+    ssize_t n = read(serial_fd_.value(), buf, sizeof(buf) - 1);
     if (n <= 0) {
       return false;
     }
@@ -208,7 +219,7 @@ private:
     return false;
   }
 
-  bool parse_nmea_gga(const std::string & sentence, sensor_msgs::msg::NavSatFix & msg)
+  bool parse_nmea_gga(const std::string & sentence, NavSatFix & msg)
   {
     // Parse GPGGA or GNGGA sentences
     // Format: $GPGGA,time,lat,N/S,lon,E/W,quality,sats,hdop,alt,M,geoid,M,age,ref*checksum
@@ -235,7 +246,7 @@ private:
       return false;
     }
     if (quality == 0) {
-      msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
+      msg.status.status = NavSatStatus::STATUS_NO_FIX;
       return false;
     }
 
@@ -260,8 +271,8 @@ private:
     msg.latitude = lat;
     msg.longitude = lon;
     msg.altitude = alt;
-    msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_FIX;
-    msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS;
+    msg.status.status = NavSatStatus::STATUS_FIX;
+    msg.status.service = NavSatStatus::SERVICE_GPS;
 
     return true;
   }

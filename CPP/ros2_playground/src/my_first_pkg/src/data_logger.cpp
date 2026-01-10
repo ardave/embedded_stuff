@@ -54,9 +54,6 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr gps_subscription_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_subscription_;
 
-  std::optional<sensor_msgs::msg::NavSatFix> latest_gps_fix_;
-  rclcpp::Time latest_gps_time_;
-
   std::optional<TimestampedGpsFix> timestamped_gps_fix_;
 };
 
