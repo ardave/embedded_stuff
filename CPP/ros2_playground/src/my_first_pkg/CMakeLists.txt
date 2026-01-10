@@ -17,8 +17,7 @@ find_package(cv_bridge REQUIRED)
 # Build as shared library for component loading
 add_library(my_first_pkg_components SHARED
   src/data_logger.cpp
-  src/camera_node.cpp
-  src/gps_node.cpp)
+  src/camera_node.cpp)
 target_include_directories(my_first_pkg_components PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
@@ -28,7 +27,6 @@ ament_target_dependencies(my_first_pkg_components rclcpp rclcpp_components std_m
 # Register the components
 rclcpp_components_register_nodes(my_first_pkg_components "DataLogger")
 rclcpp_components_register_nodes(my_first_pkg_components "CameraNode")
-rclcpp_components_register_nodes(my_first_pkg_components "GPSNode")
 
 install(TARGETS my_first_pkg_components
   ARCHIVE DESTINATION lib

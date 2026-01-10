@@ -23,12 +23,10 @@ public:
   : Node("data_logger", options)
   {
     gps_subscription_ = this->create_subscription<sensor_msgs::msg::NavSatFix>(
-      "gps_data", 10, std::bind(&DataLogger::gps_callback, this, std::placeholders::_1));
+      "/fix", 10, std::bind(&DataLogger::gps_callback, this, std::placeholders::_1));
 
     image_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
       "camera/image_raw", 10, std::bind(&DataLogger::image_callback, this, std::placeholders::_1));
-
-    this->declare_parameter<std::string>("serial_port", "");
 
     RCLCPP_INFO(this->get_logger(), "DataLogger component started");
   }

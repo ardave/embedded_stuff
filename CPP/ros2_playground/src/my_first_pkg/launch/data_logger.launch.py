@@ -1,9 +1,21 @@
 from launch import LaunchDescription
-from launch_ros.actions import ComposableNodeContainer
+from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
 
 
 def generate_launch_description():
+    # nmea_navsat_driver publishes to /fix
+    nmea_driver = Node(
+        package='nmea_navsat_driver',
+        executable='nmea_serial_driver',
+        name='nmea_serial_driver',
+        parameters=[{
+            'port': '/dev/ttyUSB0',
+            'baud_rate': 9600,
+        }],
+        output='screen',
+    )
+
     container = ComposableNodeContainer(
         name='data_logger_container',
         namespace='',
@@ -20,13 +32,8 @@ def generate_launch_description():
                 plugin='CameraNode',
                 name='camera_node',
             ),
-            ComposableNode(
-                package='my_first_pkg',
-                plugin='GPSNode',
-                name='gps_node',
-            ),
         ],
         output='screen',
     )
 
-    return LaunchDescription([container])
+    return LaunchDescription([nmea_driver, container])
