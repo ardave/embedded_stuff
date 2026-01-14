@@ -1,0 +1,14 @@
+# Build output directory
+build/
+
+# STM32CubeMX generated project file (regenerated from .ioc)
+.mxproject
+
+# macOS
+.DS_Store
+
+# Claude Code local settings
+.claude/
+
+# STM32CubeMX generated drivers (can be regenerated from .ioc)
+Drivers/
