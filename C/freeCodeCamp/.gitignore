@@ -1,0 +1,12 @@
+# Compiled binaries
+main
+*.o
+*.out
+
+# Debug symbols
+*.dSYM/
+
+# Editor settings
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
