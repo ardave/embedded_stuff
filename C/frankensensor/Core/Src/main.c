@@ -59,7 +59,15 @@ void MX_FREERTOS_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* Debounce configuration */
+#define BUTTON_DEBOUNCE_TIME_MS  50U
+#define BUTTON_PRESSED_FLAG      0x00000001U
 
+/* External reference to event flags (defined in freertos.c) */
+extern osEventFlagsId_t buttonEventFlagsHandle;
+
+/* Debounce tracking */
+static volatile uint32_t lastButtonPressTime = 0;
 /* USER CODE END 0 */
 
 /**
@@ -95,7 +103,10 @@ int main(void)
   MX_USART3_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-
+  /* Enable EXTI15_10 interrupt for user button (PC13) */
+  /* Priority 6 is safe for FreeRTOS API calls (>= configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY) */
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -164,7 +175,30 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+/**
+  * @brief  EXTI line detection callback.
+  * @param  GPIO_Pin: Specifies the pin connected to EXTI line
+  * @retval None
+  */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == USER_Btn_Pin)
+  {
+    uint32_t currentTime = HAL_GetTick();
 
+    /* Simple timestamp-based debouncing */
+    if ((currentTime - lastButtonPressTime) >= BUTTON_DEBOUNCE_TIME_MS)
+    {
+      lastButtonPressTime = currentTime;
+
+      /* Notify the button task via event flag */
+      if (buttonEventFlagsHandle != NULL)
+      {
+        osEventFlagsSet(buttonEventFlagsHandle, BUTTON_PRESSED_FLAG);
+      }
+    }
+  }
+}
 /* USER CODE END 4 */
 
 /**

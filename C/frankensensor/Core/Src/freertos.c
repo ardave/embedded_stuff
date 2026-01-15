@@ -35,7 +35,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define BUTTON_PRESSED_FLAG  0x00000001U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -45,7 +45,19 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+/* Event Flags for button notifications */
+osEventFlagsId_t buttonEventFlagsHandle;
+const osEventFlagsAttr_t buttonEventFlags_attributes = {
+  .name = "buttonEventFlags"
+};
 
+/* Button task handle and attributes */
+osThreadId_t buttonTaskHandle;
+const osThreadAttr_t buttonTask_attributes = {
+  .name = "buttonTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -57,7 +69,7 @@ const osThreadAttr_t defaultTask_attributes = {
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
+void ButtonTask(void *argument);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -95,11 +107,11 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+  buttonTaskHandle = osThreadNew(ButtonTask, NULL, &buttonTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
-  /* add events, ... */
+  buttonEventFlagsHandle = osEventFlagsNew(&buttonEventFlags_attributes);
   /* USER CODE END RTOS_EVENTS */
 
 }
@@ -124,6 +136,31 @@ void StartDefaultTask(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+/**
+  * @brief  Function implementing the buttonTask thread.
+  *         Waits for button press events and handles them.
+  * @param  argument: Not used
+  * @retval None
+  */
+void ButtonTask(void *argument)
+{
+  uint32_t flags;
 
+  for (;;)
+  {
+    /* Wait indefinitely for button press event */
+    flags = osEventFlagsWait(buttonEventFlagsHandle,
+                              BUTTON_PRESSED_FLAG,
+                              osFlagsWaitAny,
+                              osWaitForever);
+
+    /* Check if we got the flag (not an error) */
+    if ((flags & BUTTON_PRESSED_FLAG) != 0)
+    {
+      /* Button was pressed - toggle green LED as example */
+      HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+    }
+  }
+}
 /* USER CODE END Application */
 
