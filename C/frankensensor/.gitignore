@@ -12,3 +12,7 @@ build/
 
 # STM32CubeMX generated drivers (can be regenerated from .ioc)
 Drivers/
+
+# STM32CubeMX generated middlewares - FreeRTOS, etc. (can be regenerated from .ioc)
+Middlewares/
+
