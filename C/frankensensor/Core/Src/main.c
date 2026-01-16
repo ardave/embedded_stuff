@@ -61,7 +61,6 @@ void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN 0 */
 /* Debounce configuration */
 #define BUTTON_DEBOUNCE_TIME_MS  50U
-#define BUTTON_PRESSED_FLAG      0x00000001U
 
 /* External reference to task flags (defined in freertos.c) */
 extern osThreadId_t buttonTaskHandle;

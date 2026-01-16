@@ -35,7 +35,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define BUTTON_PRESSED_FLAG  0x00000001U
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/

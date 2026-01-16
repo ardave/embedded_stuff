@@ -109,7 +109,7 @@ void Error_Handler(void);
 #define LD2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-
+#define BUTTON_PRESSED_FLAG  0x00000001U
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
