@@ -45,12 +45,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-/* Event Flags for button notifications */
-osEventFlagsId_t buttonEventFlagsHandle;
-const osEventFlagsAttr_t buttonEventFlags_attributes = {
-  .name = "buttonEventFlags"
-};
-
 /* Button task handle and attributes */
 osThreadId_t buttonTaskHandle;
 const osThreadAttr_t buttonTask_attributes = {
@@ -111,7 +105,6 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
-  buttonEventFlagsHandle = osEventFlagsNew(&buttonEventFlags_attributes);
   /* USER CODE END RTOS_EVENTS */
 
 }
@@ -149,10 +142,7 @@ void ButtonTask(void *argument)
   for (;;)
   {
     /* Wait indefinitely for button press event */
-    flags = osEventFlagsWait(buttonEventFlagsHandle,
-                              BUTTON_PRESSED_FLAG,
-                              osFlagsWaitAny,
-                              osWaitForever);
+    flags = osThreadFlagsWait(BUTTON_PRESSED_FLAG, osFlagsWaitAny, osWaitForever);
 
     /* Check if we got the flag (not an error) */
     if ((flags & BUTTON_PRESSED_FLAG) != 0)

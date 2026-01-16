@@ -63,8 +63,8 @@ void MX_FREERTOS_Init(void);
 #define BUTTON_DEBOUNCE_TIME_MS  50U
 #define BUTTON_PRESSED_FLAG      0x00000001U
 
-/* External reference to event flags (defined in freertos.c) */
-extern osEventFlagsId_t buttonEventFlagsHandle;
+/* External reference to task flags (defined in freertos.c) */
+extern osThreadId_t buttonTaskHandle;
 
 /* Debounce tracking */
 static volatile uint32_t lastButtonPressTime = 0;
@@ -191,10 +191,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     {
       lastButtonPressTime = currentTime;
 
-      /* Notify the button task via event flag */
-      if (buttonEventFlagsHandle != NULL)
+      /* Notify the button task via Task Notification */
+      if (buttonTaskHandle != NULL)
       {
-        osEventFlagsSet(buttonEventFlagsHandle, BUTTON_PRESSED_FLAG);
+        osThreadFlagsSet(buttonTaskHandle, BUTTON_PRESSED_FLAG);
       }
     }
   }
