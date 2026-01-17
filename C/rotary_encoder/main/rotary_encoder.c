@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
+#include "esp_timer.h"
 
 /*
   Wiring:
@@ -23,6 +24,7 @@
 #define CLK_PIN GPIO_NUM_4 // A0 on QT Py
 #define DT_PIN  GPIO_NUM_3 // A1 on QT Py
 #define SW_PIN  GPIO_NUM_1 // A2 on QT Py
+#define DEBOUNCE_TIME_US 50000  // 50ms debounce
 
 void encoder_task(void *pvParameters);
 void configure_gpio(void);
@@ -56,11 +58,23 @@ void IRAM_ATTR encoderISR(void *arg) {
 }
 
 void IRAM_ATTR buttonISR(void *arg) {
-    buttonPressed = true;
-    // Why do we need to notify that a higher priority task was NOT awoken?
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    vTaskNotifyGiveFromISR(encoderTaskHandle, &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    static int64_t lastEdgeTime = 0;
+    static int lastStableState = 1; // 1 = released (pull-up)
+    int64_t now = esp_timer_get_time();
+
+    if ((now - lastEdgeTime) > DEBOUNCE_TIME_US) {
+        int currentState = gpio_get_level(SW_PIN);
+        // Only trigger on released (1) -> pressed (0) transition
+        if (lastStableState == 1 && currentState == 0) {
+            buttonPressed = true;
+            // Why do we need to notify that a higher priority task was NOT awoken?
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            vTaskNotifyGiveFromISR(encoderTaskHandle, &xHigherPriorityTaskWoken);
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+        lastStableState = currentState;
+    }
+    lastEdgeTime = now;
 }
 
 
@@ -117,7 +131,7 @@ void configure_gpio(void) {
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_NEGEDGE,
+        .intr_type = GPIO_INTR_ANYEDGE,
     };
     gpio_config(&sw_config);
 
