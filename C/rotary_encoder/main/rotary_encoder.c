@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
+#include "soc/gpio_reg.h"
 
 /*
   Wiring:
@@ -24,7 +25,8 @@
 #define CLK_PIN GPIO_NUM_4 // A0 on QT Py
 #define DT_PIN  GPIO_NUM_3 // A1 on QT Py
 #define SW_PIN  GPIO_NUM_1 // A2 on QT Py
-#define DEBOUNCE_TIME_US 50000  // 50ms debounce
+#define BUTTON_DEBOUNCE_TIME_US 50000  // 50ms debounce
+#define ENCODER_DEBOUNCE_TIME_US 2000 // 2ms debounce
 
 void encoder_task(void *pvParameters);
 void configure_gpio(void);
@@ -49,12 +51,30 @@ void app_main(void)
 }
 
 void IRAM_ATTR encoderISR(void *arg) {
-    int direction = (gpio_get_level(DT_PIN) == gpio_get_level(CLK_PIN)) ? 1 : -1;
-    encoderDelta += direction;
+    static uint8_t lastState = 0;
+    static const int8_t stateTable[16] = {
+        0, -1, 1, 0, // from 00
+        1, 0, 0, -1, // from 01
+        -1, 0, 0, 1, // from 10
+        0, 1, -1, 0  // from 11
+    };
 
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    vTaskNotifyGiveFromISR(encoderTaskHandle, &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    // Read both pins atomically from GPIO input register
+    uint32_t gpio_in = REG_READ(GPIO_IN_REG);
+
+    uint8_t clk = (gpio_in >> CLK_PIN) & 1;
+    uint8_t dt = (gpio_in >> DT_PIN) & 1;
+    uint8_t newState = (clk << 1) | dt;
+
+    int8_t delta = stateTable[(lastState << 2) | newState];
+    lastState = newState;
+
+    if (delta != 0) {
+        encoderDelta += delta;
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(encoderTaskHandle, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
 }
 
 void IRAM_ATTR buttonISR(void *arg) {
@@ -62,7 +82,7 @@ void IRAM_ATTR buttonISR(void *arg) {
     static int lastStableState = 1; // 1 = released (pull-up)
     int64_t now = esp_timer_get_time();
 
-    if ((now - lastEdgeTime) > DEBOUNCE_TIME_US) {
+    if ((now - lastEdgeTime) > BUTTON_DEBOUNCE_TIME_US) {
         int currentState = gpio_get_level(SW_PIN);
         // Only trigger on released (1) -> pressed (0) transition
         if (lastStableState == 1 && currentState == 0) {
@@ -73,20 +93,14 @@ void IRAM_ATTR buttonISR(void *arg) {
             portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
         }
         lastStableState = currentState;
+        lastEdgeTime = now;
     }
-    lastEdgeTime = now;
 }
 
 
 void encoder_task(void *pvParameters) {
     while (1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-        // if (encoderDelta != 0) {
-        //     int32_t delta = encoderDelta;
-        //     encoderDelta = 0;
-        //     printf("Encoder delta: %ld\n", (long)delta);
-        // }
 
         static int32_t position = 0;
 
@@ -112,7 +126,7 @@ void configure_gpio(void) {
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_NEGEDGE,
+        .intr_type = GPIO_INTR_ANYEDGE,
     };
     gpio_config(&clk_config);
 
@@ -122,7 +136,7 @@ void configure_gpio(void) {
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         // Why this?
-        .intr_type = GPIO_INTR_DISABLE,
+        .intr_type = GPIO_INTR_ANYEDGE,
     };
     gpio_config(&dt_config);
 
@@ -137,5 +151,6 @@ void configure_gpio(void) {
 
     gpio_install_isr_service(0);
     gpio_isr_handler_add(CLK_PIN, encoderISR, NULL);
+    gpio_isr_handler_add(DT_PIN, encoderISR, NULL);
     gpio_isr_handler_add(SW_PIN, buttonISR, NULL);
 }
