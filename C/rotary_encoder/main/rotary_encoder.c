@@ -26,7 +26,7 @@
 #define DT_PIN  GPIO_NUM_3 // A1 on QT Py
 #define SW_PIN  GPIO_NUM_1 // A2 on QT Py
 #define BUTTON_DEBOUNCE_TIME_US 100000  // 100ms debounce
-#define ENCODER_DEBOUNCE_TIME_US 50000 // 50ms debounce
+#define ENCODER_DEBOUNCE_TIME_US 5000 // 50ms debounce
 
 void encoder_task(void *pvParameters);
 void button_task(void *pvParameters);
@@ -63,32 +63,39 @@ void app_main(void)
 void IRAM_ATTR encoderISR(void *arg) {
     static int64_t lastEdgeTime = 0;
     int64_t now = esp_timer_get_time();
-    static uint8_t lastState = 0;
-    static const int8_t stateTable[16] = {
-        0, -1, 1, 0, // from 00
-        1, 0, 0, -1, // from 01
-        -1, 0, 0, 1, // from 10
-        0, 1, -1, 0  // from 11
-    };
+    // static uint8_t lastState = 0;
+    // static const int8_t stateTable[16] = {
+    //     0, -1, 1, 0, // from 00
+    //     1, 0, 0, -1, // from 01
+    //     -1, 0, 0, 1, // from 10
+    //     0, 1, -1, 0  // from 11
+    // };
 
     if ((now - lastEdgeTime) > ENCODER_DEBOUNCE_TIME_US) {
 
         // Read both pins atomically from GPIO input register
         uint32_t gpio_in = REG_READ(GPIO_IN_REG);
 
-        uint8_t clk = (gpio_in >> CLK_PIN) & 1;
-        uint8_t dt = (gpio_in >> DT_PIN) & 1;
-        uint8_t newState = (clk << 1) | dt;
+        // uint8_t clk = (gpio_in >> CLK_PIN) & 1;
+        // uint8_t dt = (gpio_in >> DT_PIN) & 1;
+        // uint8_t newState = (clk << 1) | dt;
 
-        int8_t delta = stateTable[(lastState << 2) | newState];
-        lastState = newState;
+        // int8_t delta = stateTable[(lastState << 2) | newState];
+        // lastState = newState;
 
-        if (delta != 0) {
-            encoderDelta += delta;
-            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            vTaskNotifyGiveFromISR(encoderTaskHandle, &xHigherPriorityTaskWoken);
-            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-        }
+        // if (delta != 0) {
+        //     encoderDelta += delta;
+        //     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        //     vTaskNotifyGiveFromISR(encoderTaskHandle, &xHigherPriorityTaskWoken);
+        //     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        // }
+
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xTaskNotifyFromISR(encoderTaskHandle,
+                           gpio_in,
+                           eSetValueWithOverwrite,
+                           &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
         lastEdgeTime = now;
     }
 }
@@ -109,18 +116,54 @@ void IRAM_ATTR buttonISR(void *arg) {
 }
 
 void encoder_task(void *pvParameters) {
+    uint32_t gpio_in;
+    uint32_t last_gpio_in = 0;
+    static int32_t position = 0;
     while (1) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        static int32_t position = 0;
+        xTaskNotifyWait(0x00,           // Don't clear bits on entry
+                        0xFFFFFFFF,     // Clear all bits on exit
+                        &gpio_in,       // Notification value
+                        portMAX_DELAY); // Wait forever
 
-        if (encoderDelta != 0) {
-            int32_t delta = encoderDelta;
-            encoderDelta = 0;
-            position += delta;
-            printf("\rEncoder position: %ld", (long)position);
-            fflush(stdout);
-        }
+        gpio_in &= (1 << CLK_PIN) | (1 << DT_PIN);  // remove bits for irrelevant GPIOs
+
+        if ((last_gpio_in == 0 && gpio_in == 8)
+            || (last_gpio_in == 8 && gpio_in == 24)
+            || (last_gpio_in == 24 && gpio_in == 16)
+            || (last_gpio_in == 16 && gpio_in == 0))
+            {
+                // Treat it like a volume knob:
+                if (position >= 1) {
+                    position--;
+                }
+            }
+        else if ((last_gpio_in == 8 && gpio_in == 0)
+            || (last_gpio_in == 24 && gpio_in == 8)
+            || (last_gpio_in == 16 && gpio_in == 24)
+            || (last_gpio_in == 0 && gpio_in == 16))
+            {
+                position++;
+            }
+
+        //printf("gpio_in: %ld, last_gpio_in: %ld\n", gpio_in, last_gpio_in);
+        printf("\rEncoder position: %ld", (long)position);
+
+        last_gpio_in = gpio_in;
+
+        // ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        // static int32_t position = 0;
+
+        // if (encoderDelta != 0) {
+        //     int32_t delta = encoderDelta;
+        //     encoderDelta = 0;
+        //     position += delta;
+        //     printf("\rEncoder position: %ld", (long)position);
+        //     fflush(stdout);
+        // }
+
+
     }
 }
 
@@ -139,7 +182,7 @@ void configure_gpio(void) {
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_ANYEDGE,
+        .intr_type = GPIO_INTR_NEGEDGE,//GPIO_INTR_ANYEDGE,
     };
     gpio_config(&clk_config);
 
@@ -149,7 +192,7 @@ void configure_gpio(void) {
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         // Why this?
-        .intr_type = GPIO_INTR_ANYEDGE,
+        .intr_type = GPIO_INTR_NEGEDGE,//GPIO_INTR_ANYEDGE,
     };
     gpio_config(&dt_config);
 
