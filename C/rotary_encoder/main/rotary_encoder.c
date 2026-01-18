@@ -25,16 +25,17 @@
 #define CLK_PIN GPIO_NUM_4 // A0 on QT Py
 #define DT_PIN  GPIO_NUM_3 // A1 on QT Py
 #define SW_PIN  GPIO_NUM_1 // A2 on QT Py
-#define BUTTON_DEBOUNCE_TIME_US 50000  // 50ms debounce
+#define BUTTON_DEBOUNCE_TIME_US 100000  // 100ms debounce
 #define ENCODER_DEBOUNCE_TIME_US 50000 // 50ms debounce
 
 void encoder_task(void *pvParameters);
+void button_task(void *pvParameters);
 void configure_gpio(void);
 
 volatile int32_t encoderDelta = 0;
-volatile bool buttonPressed = false;
 
 TaskHandle_t encoderTaskHandle = NULL;
+TaskHandle_t buttonTaskHandle = NULL;
 
 void app_main(void)
 {
@@ -47,6 +48,15 @@ void app_main(void)
         NULL,
         5,
         &encoderTaskHandle
+    );
+
+    xTaskCreate(
+        button_task,
+        "button_task",
+        2048,
+        NULL,
+        5,
+        &buttonTaskHandle
     );
 }
 
@@ -85,24 +95,18 @@ void IRAM_ATTR encoderISR(void *arg) {
 
 void IRAM_ATTR buttonISR(void *arg) {
     static int64_t lastEdgeTime = 0;
-    static int lastStableState = 1; // 1 = released (pull-up)
     int64_t now = esp_timer_get_time();
 
     if ((now - lastEdgeTime) > BUTTON_DEBOUNCE_TIME_US) {
-        int currentState = gpio_get_level(SW_PIN);
-        // Only trigger on released (1) -> pressed (0) transition
-        if (lastStableState == 1 && currentState == 0) {
-            buttonPressed = true;
-            // Why do we need to notify that a higher priority task was NOT awoken?
-            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            vTaskNotifyGiveFromISR(encoderTaskHandle, &xHigherPriorityTaskWoken);
-            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-        }
-        lastStableState = currentState;
         lastEdgeTime = now;
+
+        // Only trigger on released (1) -> pressed (0) transition
+        // Why do we need to notify that a higher priority task was NOT awoken?
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(buttonTaskHandle, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
-
 
 void encoder_task(void *pvParameters) {
     while (1) {
@@ -117,12 +121,15 @@ void encoder_task(void *pvParameters) {
             printf("\rEncoder position: %ld", (long)position);
             fflush(stdout);
         }
-
-        if (buttonPressed) {
-            buttonPressed = false;
-            printf("Button pressed!\n");
-        }
     }
+}
+
+void button_task(void *pvParameters) {
+    while (1) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        printf("Button pressed!\n");
+    }
+
 }
 
 void configure_gpio(void) {
@@ -151,7 +158,7 @@ void configure_gpio(void) {
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_ANYEDGE,
+        .intr_type = GPIO_INTR_NEGEDGE,
     };
     gpio_config(&sw_config);
 
