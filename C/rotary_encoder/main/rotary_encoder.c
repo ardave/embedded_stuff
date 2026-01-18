@@ -26,7 +26,7 @@
 #define DT_PIN  GPIO_NUM_3 // A1 on QT Py
 #define SW_PIN  GPIO_NUM_1 // A2 on QT Py
 #define BUTTON_DEBOUNCE_TIME_US 50000  // 50ms debounce
-#define ENCODER_DEBOUNCE_TIME_US 2000 // 2ms debounce
+#define ENCODER_DEBOUNCE_TIME_US 50000 // 50ms debounce
 
 void encoder_task(void *pvParameters);
 void configure_gpio(void);
@@ -51,6 +51,8 @@ void app_main(void)
 }
 
 void IRAM_ATTR encoderISR(void *arg) {
+    static int64_t lastEdgeTime = 0;
+    int64_t now = esp_timer_get_time();
     static uint8_t lastState = 0;
     static const int8_t stateTable[16] = {
         0, -1, 1, 0, // from 00
@@ -59,21 +61,25 @@ void IRAM_ATTR encoderISR(void *arg) {
         0, 1, -1, 0  // from 11
     };
 
-    // Read both pins atomically from GPIO input register
-    uint32_t gpio_in = REG_READ(GPIO_IN_REG);
+    if ((now - lastEdgeTime) > ENCODER_DEBOUNCE_TIME_US) {
 
-    uint8_t clk = (gpio_in >> CLK_PIN) & 1;
-    uint8_t dt = (gpio_in >> DT_PIN) & 1;
-    uint8_t newState = (clk << 1) | dt;
+        // Read both pins atomically from GPIO input register
+        uint32_t gpio_in = REG_READ(GPIO_IN_REG);
 
-    int8_t delta = stateTable[(lastState << 2) | newState];
-    lastState = newState;
+        uint8_t clk = (gpio_in >> CLK_PIN) & 1;
+        uint8_t dt = (gpio_in >> DT_PIN) & 1;
+        uint8_t newState = (clk << 1) | dt;
 
-    if (delta != 0) {
-        encoderDelta += delta;
-        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        vTaskNotifyGiveFromISR(encoderTaskHandle, &xHigherPriorityTaskWoken);
-        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        int8_t delta = stateTable[(lastState << 2) | newState];
+        lastState = newState;
+
+        if (delta != 0) {
+            encoderDelta += delta;
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            vTaskNotifyGiveFromISR(encoderTaskHandle, &xHigherPriorityTaskWoken);
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+        lastEdgeTime = now;
     }
 }
 
