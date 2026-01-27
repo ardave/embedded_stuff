@@ -3,7 +3,9 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_sleep.h"
 #include "soc/gpio_reg.h"
 
 /*
@@ -29,9 +31,12 @@
 #define BUTTON_DEBOUNCE_TIME_US 250000  // 250ms debounce
 #define ENCODER_QUEUE_SIZE 64
 
+static const char *TAG = "deep_sleep";
+
 void encoder_task(void *pvParameters);
 void button_task(void *pvParameters);
 void configure_gpio(void);
+void enter_deep_sleep(void);
 const char* encoder_transition_type(uint8_t last_state, uint8_t new_state);
 
 QueueHandle_t encoder_queue = NULL;
@@ -63,7 +68,7 @@ void app_main(void)
     );
 }
 
-void IRAM_ATTR encoderISR(void *arg) {
+void IRAM_ATTR encoder_ISR(void *arg) {
     static uint8_t last_queued_state = 0xFF;  // Initialize to invalid state
 
     uint32_t gpio_in = REG_READ(GPIO_IN_REG);
@@ -77,7 +82,7 @@ void IRAM_ATTR encoderISR(void *arg) {
     }
 }
 
-void IRAM_ATTR buttonISR(void *arg) {
+void IRAM_ATTR button_ISR(void *arg) {
     static int64_t last_edge_time = 0;
     int64_t now = esp_timer_get_time();
 
@@ -129,9 +134,9 @@ void encoder_task(void *pvParameters) {
 void button_task(void *pvParameters) {
     while (1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        printf("Button pressed!\n");
+        printf("Button pressed - entering deep sleep...\n");
+        enter_deep_sleep();
     }
-
 }
 
 void configure_gpio(void) {
@@ -165,7 +170,34 @@ void configure_gpio(void) {
     gpio_config(&sw_config);
 
     gpio_install_isr_service(0);
-    gpio_isr_handler_add(CLK_PIN, encoderISR, NULL);
-    gpio_isr_handler_add(DT_PIN, encoderISR, NULL);
-    gpio_isr_handler_add(SW_PIN, buttonISR, NULL);
+    gpio_isr_handler_add(CLK_PIN, encoder_ISR, NULL);
+    gpio_isr_handler_add(DT_PIN, encoder_ISR, NULL);
+    gpio_isr_handler_add(SW_PIN, button_ISR, NULL);
+}
+
+void enter_deep_sleep(void)
+{
+    ESP_LOGI(TAG, "Preparing to enter deep sleep...");
+
+    // Configure GPIO wake-up
+    // First argument: bitmask of GPIOs (only GPIO 0-5 supported on C3)
+    // Second argument: wake up when GPIO goes to this level
+    esp_err_t err = esp_deep_sleep_enable_gpio_wakeup(
+        (1ULL << SW_PIN ),
+        ESP_GPIO_WAKEUP_GPIO_LOW
+    );
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to configure GPIO wake-up: %s", esp_err_to_name(err));
+        return;
+    }
+
+    ESP_LOGI(TAG, "GPIO wake-up configured on GPIO %d", SW_PIN);
+    ESP_LOGI(TAG, "Entering deep sleep now...");
+
+    // Small delay to allow log to flush
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // Enter deep sleep - this function does not return
+    esp_deep_sleep_start();
 }
