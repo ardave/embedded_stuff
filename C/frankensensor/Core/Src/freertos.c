@@ -25,7 +25,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include "usart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,6 +46,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+  extern UART_HandleTypeDef huart3;
 /* Button task handle and attributes */
 osThreadId_t buttonTaskHandle;
 const osThreadAttr_t buttonTask_attributes = {
@@ -119,10 +121,15 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
+  uint32_t counter = 0;
+  char buffer[64];
+
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    int len = snprintf(buffer, sizeof(buffer), "Hello world! Count: %lu\r\n", counter++);
+    HAL_UART_Transmit(&huart3, (uint8_t*)buffer, len, HAL_MAX_DELAY);
+    osDelay(1000);
   }
   /* USER CODE END StartDefaultTask */
 }

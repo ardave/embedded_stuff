@@ -27,7 +27,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -108,6 +107,10 @@ int main(void)
   /* Priority 6 is safe for FreeRTOS API calls (>= configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY) */
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 6, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
+  /* Test UART before FreeRTOS starts */
+  const char *test_msg = "UART test before FreeRTOS\r\n";
+  HAL_UART_Transmit(&huart3, (uint8_t*)test_msg, 27, HAL_MAX_DELAY);
   /* USER CODE END 2 */
 
   /* Init scheduler */
