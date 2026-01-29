@@ -66,6 +66,7 @@ Core/Src/usart.c \
 Core/Src/usb_otg.c \
 Core/Src/freertos.c \
 Core/Src/gps.c \
+Core/Src/nmea_parser.c \
 Core/Src/stm32f4xx_hal_timebase_tim.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c \

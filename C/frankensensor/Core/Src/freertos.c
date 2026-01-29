@@ -150,7 +150,7 @@ void StartDefaultTask(void *argument)
       if (gga != NULL) {
         gps_data_t gps;
 
-        if (gps_parse_gga(gga, &gps) == 0) {
+        if (nmea_parse_gga(gga, &gps) == 0) {
           char msg[96];
           int len = snprintf(msg, sizeof(msg),
             "%02d:%02d:%02d Fix:%d Sat:%d Lat:%.4f Lon:%.4f HDOP:%.1f Alt:%.0fft\r\n",
