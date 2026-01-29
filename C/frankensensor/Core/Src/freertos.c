@@ -27,6 +27,9 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include "usart.h"
+#include "i2c.h"
+#include <string.h>
+#include "gps.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,6 +39,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define PA1010D_ADDR (0x10 << 1)
 
 /* USER CODE END PD */
 
@@ -59,7 +63,7 @@ const osThreadAttr_t buttonTask_attributes = {
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 128 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 
@@ -121,15 +125,44 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
-  uint32_t counter = 0;
-  char buffer[64];
+
+  /* Recover I2C bus in case slave is stuck */
+  gps_i2c_bus_recovery();
+
+  /* Check if GPS module is present on I2C bus */
+  if (HAL_I2C_IsDeviceReady(&hi2c1, PA1010D_ADDR, 3, 100) == HAL_OK) {
+    HAL_UART_Transmit(&huart3, (uint8_t*)"GPS found!\r\n", /*trials*/ 12, /*timeout ms*/ 100);
+  } else {
+    HAL_UART_Transmit(&huart3, (uint8_t*)"GPS not found\r\n", 15, 100);
+  }
 
   /* Infinite loop */
   for(;;)
   {
-    int len = snprintf(buffer, sizeof(buffer), "Hello world! Count: %lu\r\n", counter++);
-    HAL_UART_Transmit(&huart3, (uint8_t*)buffer, len, HAL_MAX_DELAY);
-    osDelay(1000);
+    static uint8_t gps_data[255];
+
+    if (HAL_I2C_Master_Receive(&hi2c1, PA1010D_ADDR, gps_data, sizeof(gps_data), 100) == HAL_OK) {
+      gps_data[254] = '\0';
+
+      // Searches the buffer for the string "$GNGGA". Returns a pointer to where it found it, or NULL if it's not in the buffer. This is how we find the sentence we care about.
+      char *gga = strstr((char *)gps_data, "$GNGGA");
+
+      if (gga != NULL) {
+        gps_data_t gps;
+
+        if (gps_parse_gga(gga, &gps) == 0) {
+          char msg[64];
+          int len = snprintf(msg, sizeof(msg),
+            "Time: %02d:%02d:%02d  Fix: %d  Sat:%d  Lat:%.4f  Lon:%.4f\r\n",
+          gps.hours, gps.minutes, gps.seconds,
+          gps.fix_quality, gps.satellites,
+          gps.latitude, gps.longitude);
+          HAL_UART_Transmit(&huart3, (uint8_t *)msg, len, 100);
+        }
+      }
+    }
+
+    osDelay(100);
   }
   /* USER CODE END StartDefaultTask */
 }

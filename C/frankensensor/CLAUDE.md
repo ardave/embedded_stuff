@@ -37,7 +37,8 @@ ISR-to-task pattern: Hardware interrupts set flags via `osThreadFlagsSet()`, tas
 | Peripheral | Pins | Purpose |
 |-----------|------|---------|
 | USART3 | PD8/PD9 | Debug output via ST-Link VCP |
-| I2C1 | PB6/PB7 | I2C interface |
+| I2C1 | PB6/PB9 | I2C interface |
+| GPS | I2C1 (0x10) | Adafruit Mini GPS PA1010D, 255-byte buffer, 1Hz NMEA output |
 | User Button | PC13 | EXTI rising edge, priority 6 |
 | LEDs | PB0/PB7/PB14 | LD1/LD2/LD3 status indicators |
 
