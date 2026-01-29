@@ -151,12 +151,14 @@ void StartDefaultTask(void *argument)
         gps_data_t gps;
 
         if (gps_parse_gga(gga, &gps) == 0) {
-          char msg[64];
+          char msg[96];
           int len = snprintf(msg, sizeof(msg),
-            "Time: %02d:%02d:%02d  Fix: %d  Sat:%d  Lat:%.4f  Lon:%.4f\r\n",
-          gps.hours, gps.minutes, gps.seconds,
-          gps.fix_quality, gps.satellites,
-          gps.latitude, gps.longitude);
+            "%02d:%02d:%02d Fix:%d Sat:%d Lat:%.4f Lon:%.4f HDOP:%.1f Alt:%.0fft\r\n",
+            gps.hours, gps.minutes, gps.seconds,
+            gps.fix_quality, gps.satellites,
+            gps.latitude, gps.longitude,
+            gps.hdop, gps.altitude * 3.28084f
+          );
           HAL_UART_Transmit(&huart3, (uint8_t *)msg, len, 100);
         }
       }

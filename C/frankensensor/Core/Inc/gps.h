@@ -14,6 +14,7 @@ typedef struct {
     float latitude;  /* Degrees, negative = South */
     float longitude; /* Degrees, negative = West */
     float altitude;  /* Meters above sea level */
+    float hdop;
 
 } gps_data_t;
 

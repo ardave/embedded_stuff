@@ -99,5 +99,17 @@ int gps_parse_gga(const char *sentence, gps_data_t *data) {
         }
     }
 
+    /* Field 8: HDOP (horizontal dilution of precision) */
+    field = find_field(sentence, 8);
+    if (field != NULL && field[0] != ',') {
+        data->hdop = atof(field);
+    }
+
+    /* Field 9: Altitude in meters */
+    field = find_field(sentence, 9);
+    if (field != NULL && field[0] != ',') {
+        data->altitude = atof(field);
+    }
+
     return 0;
 }
