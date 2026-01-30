@@ -72,7 +72,7 @@ const osThreadAttr_t defaultTask_attributes = {
 void ButtonTask(void *argument);
 /* USER CODE END FunctionPrototypes */
 
-void StartDefaultTask(void *argument);
+void StartGPSPollingTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -104,7 +104,7 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  defaultTaskHandle = osThreadNew(StartGPSPollingTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   buttonTaskHandle = osThreadNew(ButtonTask, NULL, &buttonTask_attributes);
@@ -122,7 +122,7 @@ void MX_FREERTOS_Init(void) {
   * @retval None
   */
 /* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
+void StartGPSPollingTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
 

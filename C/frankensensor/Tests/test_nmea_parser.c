@@ -9,7 +9,7 @@ void tearDown(void) {
 
 void test_valid_gga_sentence(void) {
     /* Real GGA sentence with fix */
-    const char *sentence = "$GNGGA,123519.00,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*42";
+    const char *sentence = "$GNGGA,123519.00,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*7F";
     gps_data_t data;
 
     TEST_ASSERT_EQUAL_INT(0, nmea_parse_gga(sentence, &data));
@@ -26,7 +26,7 @@ void test_valid_gga_sentence(void) {
 
 void test_empty_fields(void) {
     /* GGA with empty lat/lon fields (no fix) */
-    const char *sentence = "$GNGGA,123519.00,,,,,0,00,,,,,,,*56";
+    const char *sentence = "$GNGGA,123519.00,,,,,0,00,,,,,,,*5B";
     gps_data_t data;
 
     TEST_ASSERT_EQUAL_INT(0, nmea_parse_gga(sentence, &data));
@@ -49,7 +49,7 @@ void test_wrong_sentence_type(void) {
 
 void test_south_latitude_west_longitude(void) {
     /* Southern hemisphere, western hemisphere */
-    const char *sentence = "$GNGGA,123519.00,3356.000,S,11803.000,W,1,04,1.5,100.0,M,0.0,M,,*00";
+    const char *sentence = "$GNGGA,123519.00,3356.000,S,11803.000,W,1,04,1.5,100.0,M,0.0,M,,*49";
     gps_data_t data;
 
     TEST_ASSERT_EQUAL_INT(0, nmea_parse_gga(sentence, &data));
@@ -61,7 +61,7 @@ void test_south_latitude_west_longitude(void) {
 
 void test_single_digit_satellites(void) {
     /* Single digit satellite count */
-    const char *sentence = "$GNGGA,123519.00,4807.038,N,01131.000,E,1,3,0.9,545.4,M,47.0,M,,*42";
+    const char *sentence = "$GNGGA,123519.00,4807.038,N,01131.000,E,1,3,0.9,545.4,M,47.0,M,,*44";
     gps_data_t data;
 
     TEST_ASSERT_EQUAL_INT(0, nmea_parse_gga(sentence, &data));
@@ -70,7 +70,7 @@ void test_single_digit_satellites(void) {
 
 void test_double_digit_satellites(void) {
     /* Double digit satellite count */
-    const char *sentence = "$GNGGA,123519.00,4807.038,N,01131.000,E,1,12,0.9,545.4,M,47.0,M,,*42";
+    const char *sentence = "$GNGGA,123519.00,4807.038,N,01131.000,E,1,12,0.9,545.4,M,47.0,M,,*74";
     gps_data_t data;
 
     TEST_ASSERT_EQUAL_INT(0, nmea_parse_gga(sentence, &data));
@@ -83,8 +83,43 @@ void test_null_sentence(void) {
 }
 
 void test_null_data(void) {
-    const char *sentence = "$GNGGA,123519.00,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*42";
+    const char *sentence = "$GNGGA,123519.00,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*7F";
     TEST_ASSERT_EQUAL_INT(-1, nmea_parse_gga(sentence, NULL));
+}
+
+void test_valid_checksum(void) {
+    /* Sentence with correct checksum */
+    const char *sentence = "$GNGGA,120000.00,4000.000,N,07500.000,W,1,05,1.0,100.0,M,0.0,M,,*50";
+    gps_data_t data;
+
+    TEST_ASSERT_EQUAL_INT(0, nmea_parse_gga(sentence, &data));
+    TEST_ASSERT_EQUAL_UINT8(12, data.hours);
+    TEST_ASSERT_EQUAL_UINT8(0, data.minutes);
+    TEST_ASSERT_EQUAL_UINT8(0, data.seconds);
+}
+
+void test_invalid_checksum(void) {
+    /* Same sentence but with wrong checksum (FF instead of correct value) */
+    const char *sentence = "$GNGGA,120000.00,4000.000,N,07500.000,W,1,05,1.0,100.0,M,0.0,M,,*FF";
+    gps_data_t data;
+
+    TEST_ASSERT_EQUAL_INT(-1, nmea_parse_gga(sentence, &data));
+}
+
+void test_missing_checksum(void) {
+    /* Sentence without checksum delimiter */
+    const char *sentence = "$GNGGA,120000.00,4000.000,N,07500.000,W,1,05,1.0,100.0,M,0.0,M,,";
+    gps_data_t data;
+
+    TEST_ASSERT_EQUAL_INT(-1, nmea_parse_gga(sentence, &data));
+}
+
+void test_truncated_checksum(void) {
+    /* Sentence with only one hex digit after * */
+    const char *sentence = "$GNGGA,120000.00,4000.000,N,07500.000,W,1,05,1.0,100.0,M,0.0,M,,*4";
+    gps_data_t data;
+
+    TEST_ASSERT_EQUAL_INT(-1, nmea_parse_gga(sentence, &data));
 }
 
 int main(void) {
@@ -98,6 +133,10 @@ int main(void) {
     RUN_TEST(test_double_digit_satellites);
     RUN_TEST(test_null_sentence);
     RUN_TEST(test_null_data);
+    RUN_TEST(test_valid_checksum);
+    RUN_TEST(test_invalid_checksum);
+    RUN_TEST(test_missing_checksum);
+    RUN_TEST(test_truncated_checksum);
 
     return UNITY_END();
 }
