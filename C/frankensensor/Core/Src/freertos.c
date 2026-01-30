@@ -141,6 +141,8 @@ void StartGPSPollingTask(void *argument)
   {
     static uint8_t gps_data[255];
 
+    // Possible improvement, using a ring buffer and treat incoming GPS data as a continual stream,
+    // rather than assuming each call to HAL_I2C_Master_Receive atomically receives a full sentence:
     if (HAL_I2C_Master_Receive(&hi2c1, PA1010D_ADDR, gps_data, sizeof(gps_data), 100) == HAL_OK) {
       gps_data[254] = '\0';
 
