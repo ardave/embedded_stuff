@@ -208,3 +208,5 @@ __marimo__/
 
 .DS_Store
 Python/hello_world/wifi_secrets.py
+
+**/.claude/settings.local.json

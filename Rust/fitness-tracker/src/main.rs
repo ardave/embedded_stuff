@@ -1,3 +1,8 @@
+use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
+use log::info;
+use std::thread;
+use std::time::Duration;
+
 fn main() {
     // It is necessary to call this function once. Otherwise, some patches to the runtime
     // implemented by esp-idf-sys might not link properly. See https://github.com/esp-rs/esp-idf-template/issues/71
@@ -6,5 +11,28 @@ fn main() {
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
 
-    log::info!("Hello, world!");
+    ThreadSpawnConfiguration {
+        name: Some(b"Poll GPS\0"),
+        stack_size: 4096,
+        priority: 10, // 1-24, higher = more priority│
+        inherit: false,
+        pin_to_core: None, // ESP32-S2 is single-core, doesn't matter
+        ..Default::default()
+    }
+    .set()
+    .expect("Failed to set thread config");
+
+    let _gps_thread = thread::Builder::new()
+        .name("Poll GPS".to_string())
+        .stack_size(4096)
+        .spawn(|| loop {
+            info!("Polling GPS...");
+            thread::sleep(Duration::from_secs(1));
+        })
+        .expect("Failed to span Poll GPS Task");
+
+    loop {
+        info!("Hello, world!");
+        thread::sleep(Duration::from_secs(2));
+    }
 }

@@ -49,6 +49,6 @@
     3333,
     8000
   ],
-  "workspaceMount": "source=${localWorkspaceFolder},target=/home/esp/fitness_tracker,type=bind,consistency=cached",
-  "workspaceFolder": "/home/esp/fitness_tracker"
+  "workspaceMount": "source=${localWorkspaceFolder}/../..,target=/home/esp/embedded_stuff,type=bind,consistency=cached",
+  "workspaceFolder": "/home/esp/embedded_stuff/Rust/fitness-tracker"
 }
