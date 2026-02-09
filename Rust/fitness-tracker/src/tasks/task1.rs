@@ -1,10 +1,10 @@
 use crate::queue::FreeRtosQueue;
-use crate::tasks::gps::GpsReading;
+use crate::tasks::gps::GpsSentence;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::info;
 use std::thread;
 
-pub fn start(queue: &'static FreeRtosQueue<GpsReading>) -> thread::JoinHandle<()> {
+pub fn start(queue: &'static FreeRtosQueue<GpsSentence>) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Task1\0"),
         stack_size: 4096,
@@ -20,16 +20,21 @@ pub fn start(queue: &'static FreeRtosQueue<GpsReading>) -> thread::JoinHandle<()
         .name("Task1".to_string())
         .stack_size(4096)
         .spawn(move || loop {
-            let reading = queue.recv_blocking();
-            info!(
-                "[Task1] lat={:.6} lon={:.6} alt={:.1}m sats={} spd={:.1}kn crs={:.1}",
-                reading.latitude,
-                reading.longitude,
-                reading.altitude_m,
-                reading.satellite_count,
-                reading.speed_knots,
-                reading.course_degrees,
-            );
+            let sentence = queue.recv_blocking();
+            match sentence {
+                GpsSentence::Gga(g) => {
+                    info!(
+                        "[Task1] GGA lat={:.6} lon={:.6} alt={:.1}m sats={}",
+                        g.latitude, g.longitude, g.altitude_m, g.satellite_count,
+                    );
+                }
+                GpsSentence::Rmc(r) => {
+                    info!(
+                        "[Task1] RMC speed={:.1}kn course={:.1}",
+                        r.speed_knots, r.course_degrees,
+                    );
+                }
+            }
         })
         .expect("Failed to spawn Task1")
 }
