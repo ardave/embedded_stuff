@@ -1,10 +1,10 @@
-use crate::queue::FreeRtosQueue;
-use crate::tasks::gps::GpsSentence;
+use crate::tasks::gps_acquisition::GpsSentence;
+use esp_idf_svc::hal::task::queue::Queue;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::info;
 use std::thread;
 
-pub fn start(queue: &'static FreeRtosQueue<GpsSentence>) -> thread::JoinHandle<()> {
+pub fn start(queue: &'static Queue<GpsSentence>) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Task1\0"),
         stack_size: 4096,
@@ -20,7 +20,7 @@ pub fn start(queue: &'static FreeRtosQueue<GpsSentence>) -> thread::JoinHandle<(
         .name("Task1".to_string())
         .stack_size(4096)
         .spawn(move || loop {
-            let sentence = queue.recv_blocking();
+            let (sentence, _) = queue.recv_front(u32::MAX).unwrap();
             match sentence {
                 GpsSentence::Gga(g) => {
                     info!(

@@ -1,10 +1,10 @@
-use crate::queue::FreeRtosQueue;
-use crate::tasks::gps::GpsReading;
+use crate::tasks::gps_acquisition::GpsReading;
+use esp_idf_svc::hal::task::queue::Queue;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::info;
 use std::thread;
 
-pub fn start(queue: &'static FreeRtosQueue<GpsReading>) -> thread::JoinHandle<()> {
+pub fn start(queue: &'static Queue<GpsReading>) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Task2\0"),
         stack_size: 4096,
@@ -20,7 +20,7 @@ pub fn start(queue: &'static FreeRtosQueue<GpsReading>) -> thread::JoinHandle<()
         .name("Task2".to_string())
         .stack_size(4096)
         .spawn(move || loop {
-            let reading = queue.recv_blocking();
+            let (reading, _) = queue.recv_front(u32::MAX).unwrap();
             info!(
                 "[Task2] lat={:.6} lon={:.6} alt={:.1}m sats={} spd={:.1}kn crs={:.1}",
                 reading.latitude,

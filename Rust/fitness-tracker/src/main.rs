@@ -1,16 +1,19 @@
-mod queue;
 mod tasks;
 
-use esp_idf_svc::hal::gpio::PinDriver;
-use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
-use esp_idf_svc::hal::peripherals::Peripherals;
-use esp_idf_svc::hal::units::FromValueType;
-use log::info;
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
-use queue::FreeRtosQueue;
-use tasks::gps::{GpsReading, GpsSentence};
+use embedded_hal_bus::i2c::MutexDevice;
+use esp_idf_svc::hal::gpio::PinDriver;
+use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
+use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::hal::task::queue::Queue;
+use esp_idf_svc::hal::units::FromValueType;
+use log::info;
+
+use tasks::gps_acquisition::{GpsReading, GpsSentence};
+use tasks::user_display::DisplayMessage;
 
 fn main() {
     esp_idf_svc::sys::link_patches();
@@ -33,15 +36,26 @@ fn main() {
     )
     .expect("Failed to init I2C");
 
-    // Create GPS data queues (leaked to 'static — they live for the program's lifetime)
-    let queue1: &'static FreeRtosQueue<GpsSentence> =
-        Box::leak(Box::new(FreeRtosQueue::new(4).expect("Failed to create queue1")));
-    let queue2: &'static FreeRtosQueue<GpsReading> =
-        Box::leak(Box::new(FreeRtosQueue::new(4).expect("Failed to create queue2")));
+    // Share I2C bus between GPS and display tasks via Mutex
+    let i2c_bus: &'static Mutex<I2cDriver<'static>> = Box::leak(Box::new(Mutex::new(i2c)));
+    let gps_i2c = MutexDevice::new(i2c_bus);
+    let display_i2c = MutexDevice::new(i2c_bus);
 
-    let _gps_thread = tasks::gps::start(i2c, &[queue1], &[queue2]);
-    let _task1_thread = tasks::task1::start(queue1);
-    let _task2_thread = tasks::task2::start(queue2);
+    // Create GPS data queues (leaked to 'static — they live for the program's lifetime)
+    let gps_sentence_queue: &'static Queue<GpsSentence> =
+        Box::leak(Box::new(Queue::new(4)));
+    let gps_reading_queue: &'static Queue<GpsReading> =
+        Box::leak(Box::new(Queue::new(4)));
+
+    // Create display queue
+    let display_queue: &'static Queue<DisplayMessage> =
+        Box::leak(Box::new(Queue::new(4)));
+
+    let _gps_thread =
+        tasks::gps_acquisition::start(gps_i2c, &[gps_sentence_queue], &[gps_reading_queue]);
+    let _task1_thread = tasks::gps_aggregator::start(gps_sentence_queue);
+    let _task2_thread = tasks::sd_card::start(gps_reading_queue);
+    let _display_thread = tasks::user_display::start(display_i2c, display_queue);
 
     // Keep power_pin alive so it stays HIGH
     loop {

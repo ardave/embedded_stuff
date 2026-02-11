@@ -1,11 +1,11 @@
-use crate::queue::FreeRtosQueue;
 use embedded_hal::i2c::I2c;
+use esp_idf_svc::hal::task::queue::Queue;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
-use testable_logic::GpsJoiner;
 use log::info;
 use nmea0183::{ParseResult, Parser};
 use std::thread;
 use std::time::{Duration, Instant};
+use testable_logic::GpsJoiner;
 
 pub use testable_logic::{GgaData, GpsReading, GpsSentence, RmcData};
 
@@ -16,11 +16,11 @@ const MAX_SENTENCE_AGE: Duration = Duration::from_secs(2);
 
 pub fn start<I: I2c + Send + 'static>(
     mut i2c: I,
-    sentence_queues: &[&'static FreeRtosQueue<GpsSentence>],
-    reading_queues: &[&'static FreeRtosQueue<GpsReading>],
+    sentence_queues: &[&'static Queue<GpsSentence>],
+    reading_queues: &[&'static Queue<GpsReading>],
 ) -> thread::JoinHandle<()> {
-    let sentence_queues: Vec<&'static FreeRtosQueue<GpsSentence>> = sentence_queues.to_vec();
-    let reading_queues: Vec<&'static FreeRtosQueue<GpsReading>> = reading_queues.to_vec();
+    let sentence_queues: Vec<&'static Queue<GpsSentence>> = sentence_queues.to_vec();
+    let reading_queues: Vec<&'static Queue<GpsReading>> = reading_queues.to_vec();
 
     ThreadSpawnConfiguration {
         name: Some(b"GPS\0"),
@@ -63,12 +63,12 @@ pub fn start<I: I2c + Send + 'static>(
                                     let pr = joiner.process_gga(data, Instant::now());
 
                                     for q in &sentence_queues {
-                                        let _ = q.try_send(&pr.sentence);
+                                        let _ = q.send_back(pr.sentence, 0);
                                     }
 
-                                    if let Some(reading) = &pr.reading {
+                                    if let Some(reading) = pr.reading {
                                         for q in &reading_queues {
-                                            let _ = q.try_send(reading);
+                                            let _ = q.send_back(reading, 0);
                                         }
                                     }
 
@@ -84,13 +84,16 @@ pub fn start<I: I2c + Send + 'static>(
                                 Ok(ParseResult::RMC(Some(rmc))) => {
                                     let data = RmcData {
                                         speed_knots: rmc.speed.as_knots(),
-                                        course_degrees: rmc.course.map(|c| c.degrees).unwrap_or(0.0),
+                                        course_degrees: rmc
+                                            .course
+                                            .map(|c| c.degrees)
+                                            .unwrap_or(0.0),
                                     };
 
                                     let pr = joiner.process_rmc(data, Instant::now());
 
                                     for q in &sentence_queues {
-                                        let _ = q.try_send(&pr.sentence);
+                                        let _ = q.send_back(pr.sentence, 0);
                                     }
 
                                     info!(

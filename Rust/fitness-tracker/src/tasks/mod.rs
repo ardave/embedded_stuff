@@ -1,3 +1,9 @@
-pub mod gps;
-pub mod task1;
-pub mod task2;
+pub mod activity_state;
+pub mod battery_monitor;
+pub mod gps_acquisition;
+pub mod gps_aggregator;
+pub mod sd_card;
+pub mod sh1107;
+pub mod user_button;
+pub mod user_display;
+pub mod wifi_upload;

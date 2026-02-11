@@ -27,6 +27,8 @@ log = "0.4"
 esp-idf-svc = "0.51"
 nmea0183 = "0.6"
 embedded-hal = "1"
+embedded-graphics = "0.8"
+embedded-hal-bus = { version = "0.2", features = ["std"] }
 testable-logic = { path = "testable-logic" }
 
 # --- Optional Embassy Integration ---
