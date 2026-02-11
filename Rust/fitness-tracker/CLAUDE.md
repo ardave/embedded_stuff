@@ -22,10 +22,21 @@ cd testable-logic && cargo test
 ```
 There is no `cargo test` at the root — the binary crate sets `harness = false` and there are no integration tests for the ESP target.
 
-**Flash to device:**
+**Flash to device** (ESP32-S2 native USB requires `--no-stub` and manual bootloader entry):
+1. Put the board into bootloader mode: hold **BOOT**, press **RESET**, release **BOOT**
+2. Flash:
 ```bash
-cargo run              # uses espflash flash --monitor (set as runner in .cargo/config.toml)
+espflash flash --no-stub --port /dev/cu.usbmodem01 target/xtensa-esp32s2-espidf/debug/fitness-tracker
 ```
+3. Press **RESET** to start the firmware (the device does not auto-reset after `--no-stub` flashing)
+
+> **Note:** `cargo run` (which uses `espflash flash --monitor`) and the default flash stub both fail over native USB on this board. Always use `--no-stub`.
+
+**Monitor serial output** (USB CDC, after firmware is running):
+```bash
+cat /dev/cu.usbmodem01
+```
+> `espflash monitor` does not work reliably over native USB CDC on this board. Plain `cat` on the serial device works.
 
 ## Architecture
 
