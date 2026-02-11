@@ -27,6 +27,7 @@ log = "0.4"
 esp-idf-svc = "0.51"
 nmea0183 = "0.6"
 embedded-hal = "1"
+testable-logic = { path = "testable-logic" }
 
 # --- Optional Embassy Integration ---
 # esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }

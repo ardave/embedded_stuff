@@ -1,56 +1,18 @@
 use crate::queue::FreeRtosQueue;
 use embedded_hal::i2c::I2c;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
+use testable_logic::GpsJoiner;
 use log::info;
 use nmea0183::{ParseResult, Parser};
 use std::thread;
 use std::time::{Duration, Instant};
 
+pub use testable_logic::{GgaData, GpsReading, GpsSentence, RmcData};
+
 const PA1010D_ADDR: u8 = 0x10;
 const GPS_BUF_SIZE: usize = 255;
 const PADDING_BYTE: u8 = 0x0A;
 const MAX_SENTENCE_AGE: Duration = Duration::from_secs(2);
-
-#[derive(Clone, Copy)]
-pub struct GpsReading {
-    pub latitude: f64,
-    pub longitude: f64,
-    pub altitude_m: f32,
-    pub speed_knots: f32,
-    pub course_degrees: f32,
-    pub satellite_count: u8,
-}
-
-#[derive(Clone, Copy)]
-pub struct GgaData {
-    pub latitude: f64,
-    pub longitude: f64,
-    pub altitude_m: f32,
-    pub satellite_count: u8,
-}
-
-#[derive(Clone, Copy)]
-pub struct RmcData {
-    pub speed_knots: f32,
-    pub course_degrees: f32,
-}
-
-#[derive(Clone, Copy)]
-pub enum GpsSentence {
-    Gga(GgaData),
-    Rmc(RmcData),
-}
-
-fn assemble_reading(gga: &GgaData, rmc: &RmcData) -> GpsReading {
-    GpsReading {
-        latitude: gga.latitude,
-        longitude: gga.longitude,
-        altitude_m: gga.altitude_m,
-        speed_knots: rmc.speed_knots,
-        course_degrees: rmc.course_degrees,
-        satellite_count: gga.satellite_count,
-    }
-}
 
 pub fn start<I: I2c + Send + 'static>(
     mut i2c: I,
@@ -77,8 +39,7 @@ pub fn start<I: I2c + Send + 'static>(
         .spawn(move || {
             let mut parser = Parser::new();
             let mut buf = [0u8; GPS_BUF_SIZE];
-            let mut _last_gga: Option<(GgaData, Instant)> = None;
-            let mut last_rmc: Option<(RmcData, Instant)> = None;
+            let mut joiner = GpsJoiner::new(MAX_SENTENCE_AGE);
 
             loop {
                 match i2c.read(PA1010D_ADDR, &mut buf) {
@@ -99,19 +60,15 @@ pub fn start<I: I2c + Send + 'static>(
                                         satellite_count: gga.sat_in_use,
                                     };
 
-                                    let sentence = GpsSentence::Gga(data);
+                                    let pr = joiner.process_gga(data, Instant::now());
+
                                     for q in &sentence_queues {
-                                        let _ = q.try_send(&sentence);
+                                        let _ = q.try_send(&pr.sentence);
                                     }
 
-                                    _last_gga = Some((data, Instant::now()));
-
-                                    if let Some((rmc, rmc_time)) = &last_rmc {
-                                        if rmc_time.elapsed() < MAX_SENTENCE_AGE {
-                                            let reading = assemble_reading(&data, rmc);
-                                            for q in &reading_queues {
-                                                let _ = q.try_send(&reading);
-                                            }
+                                    if let Some(reading) = &pr.reading {
+                                        for q in &reading_queues {
+                                            let _ = q.try_send(reading);
                                         }
                                     }
 
@@ -130,12 +87,11 @@ pub fn start<I: I2c + Send + 'static>(
                                         course_degrees: rmc.course.map(|c| c.degrees).unwrap_or(0.0),
                                     };
 
-                                    let sentence = GpsSentence::Rmc(data);
-                                    for q in &sentence_queues {
-                                        let _ = q.try_send(&sentence);
-                                    }
+                                    let pr = joiner.process_rmc(data, Instant::now());
 
-                                    last_rmc = Some((data, Instant::now()));
+                                    for q in &sentence_queues {
+                                        let _ = q.try_send(&pr.sentence);
+                                    }
 
                                     info!(
                                         "RMC speed={:.1}kn course={}",
