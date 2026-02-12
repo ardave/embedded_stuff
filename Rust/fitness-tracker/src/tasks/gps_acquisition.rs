@@ -16,11 +16,9 @@ const MAX_SENTENCE_AGE: Duration = Duration::from_secs(2);
 
 pub fn start<I: I2c + Send + 'static>(
     mut i2c: I,
-    sentence_queues: &[&'static Queue<GpsSentence>],
-    reading_queues: &[&'static Queue<GpsReading>],
+    sentence_queue: &'static Queue<GpsSentence>,
+    reading_queue: &'static Queue<GpsReading>,
 ) -> thread::JoinHandle<()> {
-    let sentence_queues: Vec<&'static Queue<GpsSentence>> = sentence_queues.to_vec();
-    let reading_queues: Vec<&'static Queue<GpsReading>> = reading_queues.to_vec();
 
     ThreadSpawnConfiguration {
         name: Some(b"GPS\0"),
@@ -62,14 +60,10 @@ pub fn start<I: I2c + Send + 'static>(
 
                                     let pr = joiner.process_gga(data, Instant::now());
 
-                                    for q in &sentence_queues {
-                                        let _ = q.send_back(pr.sentence, 0);
-                                    }
+                                    let _ = sentence_queue.send_back(pr.sentence, 0);
 
                                     if let Some(reading) = pr.reading {
-                                        for q in &reading_queues {
-                                            let _ = q.send_back(reading, 0);
-                                        }
+                                        let _ = reading_queue.send_back(reading, 0);
                                     }
 
                                     info!(
@@ -92,9 +86,7 @@ pub fn start<I: I2c + Send + 'static>(
 
                                     let pr = joiner.process_rmc(data, Instant::now());
 
-                                    for q in &sentence_queues {
-                                        let _ = q.send_back(pr.sentence, 0);
-                                    }
+                                    let _ = sentence_queue.send_back(pr.sentence, 0);
 
                                     info!(
                                         "RMC speed={:.1}kn course={}",
