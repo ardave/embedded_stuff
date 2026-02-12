@@ -15,6 +15,22 @@ use log::info;
 use tasks::gps_acquisition::{GpsReading, GpsSentence};
 use tasks::user_display::DisplayMessage;
 
+/// Log the minimum free stack (bytes) each FreeRTOS task has ever had.
+/// A value approaching zero means that task is close to overflowing.
+fn log_stack_high_water_marks() {
+    const TASK_NAMES: &[&[u8]] = &[b"GPS\0", b"Display\0", b"Task1\0", b"Task2\0"];
+    for name in TASK_NAMES {
+        unsafe {
+            let handle = esp_idf_svc::sys::xTaskGetHandle(name.as_ptr() as *const _);
+            if !handle.is_null() {
+                let hwm = esp_idf_svc::sys::uxTaskGetStackHighWaterMark(handle);
+                let task_name = core::str::from_utf8(&name[..name.len() - 1]).unwrap_or("?");
+                info!("[Stack] {}: {} bytes free", task_name, hwm);
+            }
+        }
+    }
+}
+
 fn main() {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
@@ -56,7 +72,7 @@ fn main() {
 
     // Keep power_pin alive so it stays HIGH
     loop {
-        info!("Hello, world!");
+        log_stack_high_water_marks();
         thread::sleep(Duration::from_secs(2));
     }
 }

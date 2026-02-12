@@ -7,7 +7,7 @@ use std::thread;
 pub fn start(queue: &'static Queue<GpsSentence>) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Task1\0"),
-        stack_size: 4096,
+        stack_size: 6144,
         priority: 5,
         inherit: false,
         pin_to_core: None,
@@ -18,7 +18,7 @@ pub fn start(queue: &'static Queue<GpsSentence>) -> thread::JoinHandle<()> {
 
     thread::Builder::new()
         .name("Task1".to_string())
-        .stack_size(4096)
+        .stack_size(6144)
         .spawn(move || loop {
             let (sentence, _) = queue.recv_front(u32::MAX).unwrap();
             match sentence {

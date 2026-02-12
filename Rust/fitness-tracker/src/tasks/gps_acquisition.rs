@@ -22,7 +22,7 @@ pub fn start<I: I2c + Send + 'static>(
 
     ThreadSpawnConfiguration {
         name: Some(b"GPS\0"),
-        stack_size: 4096,
+        stack_size: 6144,
         priority: 10,
         inherit: false,
         pin_to_core: None,
@@ -33,7 +33,7 @@ pub fn start<I: I2c + Send + 'static>(
 
     thread::Builder::new()
         .name("GPS".to_string())
-        .stack_size(4096)
+        .stack_size(6144)
         .spawn(move || {
             let mut parser = Parser::new();
             let mut buf = [0u8; GPS_BUF_SIZE];

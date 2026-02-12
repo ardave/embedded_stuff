@@ -1,11 +1,11 @@
 use crate::tasks::sh1107::Sh1107;
-use esp_idf_svc::hal::task::queue::Queue;
 use embedded_graphics::mono_font::ascii::FONT_10X20;
 use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
 use embedded_graphics::text::Text;
 use embedded_hal::i2c::I2c;
+use esp_idf_svc::hal::task::queue::Queue;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::info;
 use std::thread;
@@ -47,7 +47,7 @@ pub fn start<I: I2c + Send + 'static>(
 ) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Display\0"),
-        stack_size: 4096,
+        stack_size: 8192,
         priority: 4,
         inherit: false,
         pin_to_core: None,
@@ -58,7 +58,7 @@ pub fn start<I: I2c + Send + 'static>(
 
     thread::Builder::new()
         .name("Display".to_string())
-        .stack_size(4096)
+        .stack_size(8192)
         .spawn(move || {
             let mut display = Sh1107::new(i2c);
 
