@@ -10,7 +10,6 @@ use crate::QueueSender;
 
 const PA1010D_ADDR: u8 = 0x10;
 const GPS_BUF_SIZE: usize = 255;
-const PADDING_BYTE: u8 = 0x0A;
 
 pub fn start<I: I2c + Send + 'static>(
     mut i2c: I,
@@ -37,13 +36,7 @@ pub fn start<I: I2c + Send + 'static>(
             loop {
                 match i2c.read(PA1010D_ADDR, &mut buf) {
                     Ok(()) => {
-                        let end = buf
-                            .iter()
-                            .rposition(|&b| b != PADDING_BYTE)
-                            .map(|i| i + 1)
-                            .unwrap_or(0);
-
-                        for result in parser.parse_from_bytes(&buf[..end]) {
+                        for result in parser.parse_from_bytes(&buf) {
                             match result {
                                 Ok(ParseResult::GGA(Some(gga))) => {
                                     let _ = sentence_queue
@@ -61,7 +54,7 @@ pub fn start<I: I2c + Send + 'static>(
                                     info!(
                                         "NMEA parse error: '{}'.  Sentence: '{}'.",
                                         e,
-                                        String::from_utf8_lossy(&buf[..end])
+                                        String::from_utf8_lossy(&buf)
                                     );
                                 }
                             }
