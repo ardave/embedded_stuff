@@ -1,10 +1,12 @@
-use crate::tasks::gps_acquisition::GpsSentence;
-use esp_idf_svc::hal::task::queue::Queue;
+use crate::tasks::gps_acquisition::FitnessTrackerSentence;
+use crate::QueueReceiver;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::info;
 use std::thread;
 
-pub fn start(queue: &'static Queue<GpsSentence>) -> thread::JoinHandle<()> {
+// Combines GGA and RMEA sentences, provided that they are timely enough, before sending
+// the joined Reading to downstream Queue(s)
+pub fn start(queue: QueueReceiver<FitnessTrackerSentence>) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Task1\0"),
         stack_size: 6144,
@@ -22,18 +24,19 @@ pub fn start(queue: &'static Queue<GpsSentence>) -> thread::JoinHandle<()> {
         .spawn(move || loop {
             let (sentence, _) = queue.recv_front(u32::MAX).unwrap();
             match sentence {
-                GpsSentence::Gga(g) => {
-                    info!(
-                        "[Task1] GGA lat={:.6} lon={:.6} alt={:.1}m sats={}",
-                        g.latitude, g.longitude, g.altitude_m, g.satellite_count,
-                    );
-                }
-                GpsSentence::Rmc(r) => {
-                    info!(
-                        "[Task1] RMC speed={:.1}kn course={:.1}",
-                        r.speed_knots, r.course_degrees,
-                    );
-                }
+                FitnessTrackerSentence::FixData(fix_data) => {}
+                FitnessTrackerSentence::MinNav(min_nav_data) => {} // GpsSentence::Gga(g) => {
+                                                                   //     info!(
+                                                                   //         "[Task1] GGA lat={:.6} lon={:.6} alt={:.1}m sats={}",
+                                                                   //         g.latitude, g.longitude, g.altitude_m, g.satellite_count,
+                                                                   //     );
+                                                                   // }
+                                                                   // GpsSentence::Rmc(r) => {
+                                                                   //     info!(
+                                                                   //         "[Task1] RMC speed={:.1}kn course={:.1}",
+                                                                   //         r.speed_knots, r.course_degrees,
+                                                                   //     );
+                                                                   // }
             }
         })
         .expect("Failed to spawn Task1")

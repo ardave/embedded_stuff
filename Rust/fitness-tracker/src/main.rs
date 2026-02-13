@@ -12,24 +12,9 @@ use esp_idf_svc::hal::task::queue::Queue;
 use esp_idf_svc::hal::units::FromValueType;
 use log::info;
 
-use tasks::gps_acquisition::{GpsReading, GpsSentence};
 use tasks::user_display::{DisplayLine, DisplayMessage};
 
-/// Log the minimum free stack (bytes) each FreeRTOS task has ever had.
-/// A value approaching zero means that task is close to overflowing.
-fn log_stack_high_water_marks() {
-    const TASK_NAMES: &[&[u8]] = &[b"GPS\0", b"Display\0", b"Task1\0", b"Task2\0"];
-    for name in TASK_NAMES {
-        unsafe {
-            let handle = esp_idf_svc::sys::xTaskGetHandle(name.as_ptr() as *const _);
-            if !handle.is_null() {
-                let hwm = esp_idf_svc::sys::uxTaskGetStackHighWaterMark(handle);
-                let task_name = core::str::from_utf8(&name[..name.len() - 1]).unwrap_or("?");
-                info!("[Stack] {}: {} bytes free", task_name, hwm);
-            }
-        }
-    }
-}
+use crate::tasks::gps_acquisition::FitnessTrackerSentence;
 
 fn main() {
     thread::sleep(Duration::from_secs(5));
@@ -59,29 +44,60 @@ fn main() {
     // Setup display bits:
     let display_i2c = MutexDevice::new(i2c_bus);
     let display_queue: &'static Queue<DisplayMessage> = Box::leak(Box::new(Queue::new(4)));
-    let _display_thread = tasks::user_display::start(display_i2c, display_queue);
+    let display_queue_receiver = QueueReceiver(display_queue);
+    let _display_thread = tasks::user_display::start(display_i2c, display_queue_receiver);
 
     // Send a test message to verify the display is working
     display_queue
-        .send_back(DisplayMessage::Line1(DisplayLine::new("Hello,")), 0)
-        .expect("Failed to enqueue display test message");
-    display_queue
-        .send_back(DisplayMessage::Line2(DisplayLine::new("world!")), 0)
+        .send_back(DisplayMessage::Line1(DisplayLine::new("Hello!")), 0)
         .expect("Failed to enqueue display test message");
 
     // Setup GPS bits:
     let gps_i2c = MutexDevice::new(i2c_bus);
-    let gps_sentence_queue: &'static Queue<GpsSentence> = Box::leak(Box::new(Queue::new(4)));
-    let gps_reading_queue: &'static Queue<GpsReading> = Box::leak(Box::new(Queue::new(4)));
-    let _gps_thread = tasks::gps_acquisition::start(gps_i2c, gps_sentence_queue, gps_reading_queue);
-    let _gps_aggregator_thread = tasks::gps_aggregator::start(gps_sentence_queue);
+    let gps_sentence_queue: &'static Queue<FitnessTrackerSentence> =
+        Box::leak(Box::new(Queue::new(4)));
+    let _gps_acquisition_thread =
+        tasks::gps_acquisition::start(gps_i2c, QueueSender(gps_sentence_queue));
+    let _gps_aggregator_thread = tasks::gps_aggregator::start(QueueReceiver(gps_sentence_queue));
 
     // Setup SD Card bits:
-    let _sd_card_thread = tasks::sd_card::start(gps_reading_queue);
+    //let _sd_card_thread = tasks::sd_card::start(QueueReceiver(gps_reading_queue));
 
     // Keep power_pin alive so it stays HIGH
     loop {
         log_stack_high_water_marks();
         thread::sleep(Duration::from_secs(2));
+    }
+}
+
+pub struct QueueSender<T: 'static>(&'static Queue<T>);
+
+impl<T: Copy + 'static> QueueReceiver<T> {
+    pub fn recv_front(&self, timeout: u32) -> Option<(T, bool)> {
+        self.0.recv_front(timeout)
+    }
+}
+
+pub struct QueueReceiver<T: 'static>(&'static Queue<T>);
+
+impl<T: Copy> QueueSender<T> {
+    pub fn send_back(&self, item: T, timeout: u32) -> Result<bool, esp_idf_svc::sys::EspError> {
+        self.0.send_back(item, timeout)
+    }
+}
+
+/// Log the minimum free stack (bytes) each FreeRTOS task has ever had.
+/// A value approaching zero means that task is close to overflowing.
+fn log_stack_high_water_marks() {
+    const TASK_NAMES: &[&[u8]] = &[b"GPS\0", b"Display\0", b"Task1\0", b"Task2\0"];
+    for name in TASK_NAMES {
+        unsafe {
+            let handle = esp_idf_svc::sys::xTaskGetHandle(name.as_ptr() as *const _);
+            if !handle.is_null() {
+                let hwm = esp_idf_svc::sys::uxTaskGetStackHighWaterMark(handle);
+                let task_name = core::str::from_utf8(&name[..name.len() - 1]).unwrap_or("?");
+                info!("[Stack] {}: {} bytes free", task_name, hwm);
+            }
+        }
     }
 }

@@ -1,11 +1,11 @@
 use crate::tasks::sh1107::Sh1107;
+use crate::QueueReceiver;
 use embedded_graphics::mono_font::ascii::FONT_10X20;
 use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
 use embedded_graphics::text::Text;
 use embedded_hal::i2c::I2c;
-use esp_idf_svc::hal::task::queue::Queue;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::info;
 use std::thread;
@@ -43,7 +43,7 @@ pub enum DisplayMessage {
 
 pub fn start<I: I2c + Send + 'static>(
     i2c: I,
-    queue: &'static Queue<DisplayMessage>,
+    queue: QueueReceiver<DisplayMessage>,
 ) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Display\0"),

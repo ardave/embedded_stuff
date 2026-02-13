@@ -1,10 +1,9 @@
-use crate::tasks::gps_acquisition::GpsReading;
-use esp_idf_svc::hal::task::queue::Queue;
+use crate::{tasks::gps_acquisition::FitnessTrackerSentence, QueueReceiver};
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::info;
 use std::thread;
 
-pub fn start(queue: &'static Queue<GpsReading>) -> thread::JoinHandle<()> {
+pub fn start(queue: QueueReceiver<FitnessTrackerSentence>) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Task2\0"),
         stack_size: 6144,
@@ -20,16 +19,20 @@ pub fn start(queue: &'static Queue<GpsReading>) -> thread::JoinHandle<()> {
         .name("Task2".to_string())
         .stack_size(6144)
         .spawn(move || loop {
-            let (reading, _) = queue.recv_front(u32::MAX).unwrap();
-            info!(
-                "[Task2] lat={:.6} lon={:.6} alt={:.1}m sats={} spd={:.1}kn crs={:.1}",
-                reading.latitude,
-                reading.longitude,
-                reading.altitude_m,
-                reading.satellite_count,
-                reading.speed_knots,
-                reading.course_degrees,
-            );
+            match queue.recv_front(u32::MAX) {
+                Some((FitnessTrackerSentence::FixData(fix), _)) => { /* use fix */ }
+                Some((FitnessTrackerSentence::MinNav(nav), _)) => { /* use nav */ }
+                None => { /* handle None */ }
+            }
+            // info!(
+            //     "[Task2] lat={:.6} lon={:.6} alt={:.1}m sats={} spd={:.1}kn crs={:.1}",
+            //     reading.latitude,
+            //     reading.longitude,
+            //     reading.altitude_m,
+            //     reading.satellite_count,
+            //     reading.speed_knots,
+            //     reading.course_degrees,
+            // );
         })
         .expect("Failed to spawn Task2")
 }
