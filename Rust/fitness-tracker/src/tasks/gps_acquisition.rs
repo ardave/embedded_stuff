@@ -58,7 +58,11 @@ pub fn start<I: I2c + Send + 'static>(
                                 }
                                 Ok(_) => {}
                                 Err(e) => {
-                                    info!("NMEA parse error: {}", e);
+                                    info!(
+                                        "NMEA parse error: '{}'.  Sentence: '{}'.",
+                                        e,
+                                        String::from_utf8_lossy(&buf[..end])
+                                    );
                                 }
                             }
                         }

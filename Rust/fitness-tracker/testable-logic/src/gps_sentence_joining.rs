@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 #[derive(Default)]
 pub struct GPSSentenceState {
     pub maybe_fix_data: Option<FixData>,
@@ -12,15 +14,14 @@ pub enum FitnessTrackerSentence {
 
 #[derive(Clone, Copy)]
 pub struct FixData {
-    // 123519.00 -> 12:35:19.00 UTC
-    utc_time: chrono::NaiveTime,
-    lat: f64,
-    lon: f64,
-    ns: NS,
-    ew: EW,
-    fix_method: FixMethod,
-    horizontal_geometry_quality: usize,
-    num_satellites: usize,
+    pub utc_time: chrono::NaiveTime,
+    pub lat: f64,
+    pub lon: f64,
+    pub ns: NS,
+    pub ew: EW,
+    pub fix_method: FixMethod,
+    pub horizontal_geometry_quality: usize,
+    pub num_satellites: usize,
 }
 
 impl From<nmea0183::GGA> for FixData {
@@ -65,11 +66,60 @@ impl From<nmea0183::GGA> for FixData {
 }
 
 #[derive(Clone, Copy)]
-pub struct MinNavData {}
+pub struct MinNavData {
+    pub timestamp: DateTime<Utc>,
+    pub source: NavSystem,
+    pub lat: f64,
+    pub lon: f64,
+    pub ns: NS,
+    pub ew: EW,
+    pub speed_mph: f32,
+    pub course: Option<f32>,
+    pub mode: NavMode,
+}
 
 impl From<nmea0183::RMC> for MinNavData {
     fn from(value: nmea0183::RMC) -> Self {
-        Self {}
+        let d = value.datetime.date;
+        let t = value.datetime.time;
+        let secs = t.seconds.trunc() as u32;
+        let nanos = (t.seconds.fract() * 1_000_000_000.0) as u32;
+        let naive = chrono::NaiveDate::from_ymd_opt(d.year as i32, d.month as u32, d.day as u32)
+            .expect("invalid GPS date")
+            .and_hms_nano_opt(t.hours as u32, t.minutes as u32, secs, nanos)
+            .expect("invalid GPS time");
+        Self {
+            timestamp: DateTime::from_naive_utc_and_offset(naive, Utc),
+            source: match value.source {
+                nmea0183::Source::GPS => NavSystem::GPS,
+                nmea0183::Source::GLONASS => NavSystem::GLONASS,
+                nmea0183::Source::Gallileo => NavSystem::Galileo,
+                nmea0183::Source::Beidou => NavSystem::Beidou,
+                nmea0183::Source::GNSS => NavSystem::GNSS,
+            },
+            lat: value.latitude.as_f64(),
+            lon: value.longitude.as_f64(),
+            ns: match value.latitude.hemisphere {
+                nmea0183::coords::Hemisphere::North => NS::N,
+                nmea0183::coords::Hemisphere::South => NS::S,
+                _ => unreachable!(),
+            },
+            ew: match value.longitude.hemisphere {
+                nmea0183::coords::Hemisphere::East => EW::E,
+                nmea0183::coords::Hemisphere::West => EW::W,
+                _ => unreachable!(),
+            },
+            speed_mph: value.speed.as_mph(),
+            course: value.course.map(|c| c.degrees),
+            mode: match value.mode {
+                nmea0183::Mode::Autonomous => NavMode::Autonomous,
+                nmea0183::Mode::Differential => NavMode::Differential,
+                nmea0183::Mode::Estimated => NavMode::Estimated,
+                nmea0183::Mode::Manual => NavMode::Manual,
+                nmea0183::Mode::Simulator => NavMode::Simulator,
+                nmea0183::Mode::NotValid => NavMode::NotValid,
+            },
+        }
     }
 }
 
@@ -83,6 +133,25 @@ pub enum NS {
 pub enum EW {
     E,
     W,
+}
+
+#[derive(Clone, Copy)]
+pub enum NavSystem {
+    GPS,
+    GLONASS,
+    Galileo,
+    Beidou,
+    GNSS,
+}
+
+#[derive(Clone, Copy)]
+pub enum NavMode {
+    Autonomous,
+    Differential,
+    Estimated,
+    Manual,
+    Simulator,
+    NotValid,
 }
 
 #[derive(Clone, Copy)]
