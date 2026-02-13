@@ -40,7 +40,7 @@ cat /dev/cu.usbmodem01
 
 ## Architecture
 
-This is an embedded Rust firmware for an **Adafruit ESP32-S2 Feather** with a **PA1010D GPS module** (I2C). It uses the `esp-idf-svc` HAL with FreeRTOS threading — not async/Embassy.
+This is an embedded Rust firmware for an **Adafruit ESP32-S2 Feather** with a **PA1010D GPS module** (I2C) and an **Adafruit Monochrome 1.12" 128x128 OLED Display (SH1107, Product ID 5297)** connected via STEMMA QT. It uses the `esp-idf-svc` HAL with FreeRTOS threading — not async/Embassy.
 
 ### Task model
 
@@ -72,7 +72,8 @@ The subcrate has its own `.cargo/config.toml` that overrides the build target to
 - **ESP-IDF version:** v5.3.3 (set in `.cargo/config.toml` env)
 - **Linker:** `ldproxy` (required for ESP-IDF std builds)
 - **`build.rs`** calls `embuild::espidf::sysenv::output()` — ESP-specific, won't compile on host
-- **GPIO7** must be driven HIGH to enable I2C/STEMMA QT power on this board
+- **GPIO7** must be driven HIGH to enable I2C/STEMMA QT power on this board; devices need ≥250ms after power-on before I2C communication
+- **Display:** SH1107 128×128 OLED (Adafruit PID 5297), I2C address **0x3D** (default, A0 open), driver in `src/tasks/sh1107.rs`
 - **Console output** is USB CDC, not UART (`sdkconfig.defaults`)
 - **Main task stack** is 8000 bytes (Rust needs more than the 3K default)
 

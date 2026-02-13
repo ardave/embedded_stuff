@@ -31,13 +31,13 @@ impl<I: I2c> Sh1107<I> {
         let cmds: &[u8] = &[
             0xAE, // display off
             0xD5, 0x51, // set display clock div
-            0x20, // set memory mode (page addressing)
+            0x20, 0x00, // set memory mode (page addressing)
             0x81, 0x4F, // set contrast
             0xAD, 0x8A, // internal IREF
             0xA0, // segment remap = 0
             0xC0, // COM scan normal
             0xDC, 0x00, // display start line = 0
-            0xD3, 0x00, // display offset = 0
+            0xD3, 0x60, // display offset = 96 (required for Adafruit SH1107 128x128)
             0xD9, 0x22, // pre-charge period
             0xDB, 0x35, // VCOM deselect level
             0xA8, 0x7F, // multiplex ratio = 127

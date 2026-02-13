@@ -13,7 +13,7 @@ use esp_idf_svc::hal::units::FromValueType;
 use log::info;
 
 use tasks::gps_acquisition::{GpsReading, GpsSentence};
-use tasks::user_display::DisplayMessage;
+use tasks::user_display::{DisplayLine, DisplayMessage};
 
 /// Log the minimum free stack (bytes) each FreeRTOS task has ever had.
 /// A value approaching zero means that task is close to overflowing.
@@ -32,6 +32,7 @@ fn log_stack_high_water_marks() {
 }
 
 fn main() {
+    thread::sleep(Duration::from_secs(5));
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
 
@@ -41,8 +42,8 @@ fn main() {
     let mut power_pin = PinDriver::output(peripherals.pins.gpio7).expect("Failed to init GPIO 7");
     power_pin.set_high().expect("Failed to set GPIO 7 HIGH");
 
-    // Give the bus a moment to stabilize
-    thread::sleep(Duration::from_millis(10));
+    // Wait for STEMMA QT devices to power up (display needs ≥250ms after VCC)
+    thread::sleep(Duration::from_millis(250));
 
     let i2c = I2cDriver::new(
         peripherals.i2c0,
@@ -59,6 +60,14 @@ fn main() {
     let display_i2c = MutexDevice::new(i2c_bus);
     let display_queue: &'static Queue<DisplayMessage> = Box::leak(Box::new(Queue::new(4)));
     let _display_thread = tasks::user_display::start(display_i2c, display_queue);
+
+    // Send a test message to verify the display is working
+    display_queue
+        .send_back(DisplayMessage::Line1(DisplayLine::new("Hello,")), 0)
+        .expect("Failed to enqueue display test message");
+    display_queue
+        .send_back(DisplayMessage::Line2(DisplayLine::new("world!")), 0)
+        .expect("Failed to enqueue display test message");
 
     // Setup GPS bits:
     let gps_i2c = MutexDevice::new(i2c_bus);
