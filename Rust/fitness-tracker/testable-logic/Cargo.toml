@@ -2,3 +2,7 @@
 name = "testable-logic"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+chrono = "0.4.43"
+nmea0183 = "0.6"

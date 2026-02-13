@@ -3,14 +3,14 @@ use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::info;
 use nmea0183::{ParseResult, Parser};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use testable_logic::gps_sentence_joining::FitnessTrackerSentence;
 
 use crate::QueueSender;
 
 const PA1010D_ADDR: u8 = 0x10;
 const GPS_BUF_SIZE: usize = 255;
 const PADDING_BYTE: u8 = 0x0A;
-const MAX_SENTENCE_AGE: Duration = Duration::from_secs(2);
 
 pub fn start<I: I2c + Send + 'static>(
     mut i2c: I,
@@ -72,28 +72,4 @@ pub fn start<I: I2c + Send + 'static>(
             }
         })
         .expect("Failed to spawn GPS task")
-}
-
-#[derive(Clone, Copy)]
-pub enum FitnessTrackerSentence {
-    FixData(FixData),
-    MinNav(MinNavData),
-}
-
-#[derive(Clone, Copy)]
-pub struct FixData {}
-
-impl From<nmea0183::GGA> for FixData {
-    fn from(value: nmea0183::GGA) -> Self {
-        Self {}
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct MinNavData {}
-
-impl From<nmea0183::RMC> for MinNavData {
-    fn from(value: nmea0183::RMC) -> Self {
-        Self {}
-    }
 }

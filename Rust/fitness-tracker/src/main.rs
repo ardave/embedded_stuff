@@ -13,8 +13,7 @@ use esp_idf_svc::hal::units::FromValueType;
 use log::info;
 
 use tasks::user_display::{DisplayLine, DisplayMessage};
-
-use crate::tasks::gps_acquisition::FitnessTrackerSentence;
+use testable_logic::gps_sentence_joining::FitnessTrackerSentence;
 
 fn main() {
     thread::sleep(Duration::from_secs(5));
