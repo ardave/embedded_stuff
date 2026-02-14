@@ -6,13 +6,26 @@ pub struct GPSSentenceState {
     pub maybe_min_nav_data: Option<MinNavData>,
 }
 
-#[derive(Clone, Copy)]
+impl GPSSentenceState {
+    pub fn is_complete_reading(&self) -> Option<CompleteGPSReading> {
+        match (self.maybe_fix_data, self.maybe_min_nav_data) {
+            (Some(fix_data), Some(nav_data)) => Some(CompleteGPSReading { timestamp: () }),
+            _ => None,
+        }
+    }
+}
+
+pub struct CompleteGPSReading {
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum FitnessTrackerSentence {
     FixData(FixData),
     MinNav(MinNavData),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct FixData {
     pub utc_time: chrono::NaiveTime,
     pub lat: f64,
@@ -65,7 +78,7 @@ impl From<nmea0183::GGA> for FixData {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct MinNavData {
     pub timestamp: DateTime<Utc>,
     pub source: NavSystem,
@@ -123,19 +136,19 @@ impl From<nmea0183::RMC> for MinNavData {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum NS {
     N,
     S,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum EW {
     E,
     W,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum NavSystem {
     GPS,
     GLONASS,
@@ -144,7 +157,7 @@ pub enum NavSystem {
     GNSS,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum NavMode {
     Autonomous,
     Differential,
@@ -154,7 +167,7 @@ pub enum NavMode {
     NotValid,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum FixMethod {
     Invalid,
     GPS,

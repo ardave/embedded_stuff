@@ -25,24 +25,14 @@ pub fn start(queue: QueueReceiver<FitnessTrackerSentence>) -> thread::JoinHandle
         .stack_size(6144)
         .spawn(move || loop {
             let (sentence, _) = queue.recv_front(u32::MAX).unwrap();
+            info!("Received sentence like: {:?}", sentence);
             match sentence {
                 FitnessTrackerSentence::FixData(fix_data) => {
                     state.maybe_fix_data = Some(fix_data);
                 }
                 FitnessTrackerSentence::MinNav(min_nav_data) => {
                     state.maybe_min_nav_data = Some(min_nav_data);
-                } // GpsSentence::Gga(g) => {
-                  //     info!(
-                  //         "[Task1] GGA lat={:.6} lon={:.6} alt={:.1}m sats={}",
-                  //         g.latitude, g.longitude, g.altitude_m, g.satellite_count,
-                  //     );
-                  // }
-                  // GpsSentence::Rmc(r) => {
-                  //     info!(
-                  //         "[Task1] RMC speed={:.1}kn course={:.1}",
-                  //         r.speed_knots, r.course_degrees,
-                  //     );
-                  // }
+                }
             }
         })
         .expect("Failed to spawn Task1")
