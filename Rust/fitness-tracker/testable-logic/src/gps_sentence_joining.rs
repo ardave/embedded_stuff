@@ -9,7 +9,18 @@ pub struct GPSSentenceState {
 impl GPSSentenceState {
     pub fn is_complete_reading(&self) -> Option<CompleteGPSReading> {
         match (self.maybe_fix_data, self.maybe_min_nav_data) {
-            (Some(fix_data), Some(nav_data)) => Some(CompleteGPSReading { timestamp: () }),
+            (Some(fix_data), Some(nav_data)) => {
+                Some(CompleteGPSReading {
+                    timestamp: nav_data.timestamp,
+                    latitude: fix_data.lat,
+                    longitude: fix_data.lon,
+                    altitude_meters: fix_data.altitude_meters,
+                    speed_mph: nav_data.speed_mph,
+                    num_satellites: fix_data.num_satellites,
+                    hdop: fix_data.hdop,
+                    bearing: nav_data.course,
+                })
+            }
             _ => None,
         }
     }
@@ -17,6 +28,13 @@ impl GPSSentenceState {
 
 pub struct CompleteGPSReading {
     pub timestamp: DateTime<Utc>,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub altitude_meters: Option<f32>,
+    pub speed_mph: f32,
+    pub num_satellites: usize,
+    pub hdop: f32,
+    pub bearing: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -30,11 +48,10 @@ pub struct FixData {
     pub utc_time: chrono::NaiveTime,
     pub lat: f64,
     pub lon: f64,
-    pub ns: NS,
-    pub ew: EW,
     pub fix_method: FixMethod,
-    pub horizontal_geometry_quality: usize,
+    pub hdop: f32,
     pub num_satellites: usize,
+    pub altitude_meters: Option<f32>,
 }
 
 impl From<nmea0183::GGA> for FixData {
@@ -51,16 +68,6 @@ impl From<nmea0183::GGA> for FixData {
             .expect("invalid GPS time"),
             lat: value.latitude.as_f64(),
             lon: value.longitude.as_f64(),
-            ns: match value.latitude.hemisphere {
-                nmea0183::coords::Hemisphere::North => NS::N,
-                nmea0183::coords::Hemisphere::South => NS::S,
-                _ => unreachable!(),
-            },
-            ew: match value.longitude.hemisphere {
-                nmea0183::coords::Hemisphere::East => EW::E,
-                nmea0183::coords::Hemisphere::West => EW::W,
-                _ => unreachable!(),
-            },
             fix_method: match value.gps_quality {
                 nmea0183::GPSQuality::NoFix => FixMethod::Invalid,
                 nmea0183::GPSQuality::GPS => FixMethod::GPS,
@@ -72,8 +79,9 @@ impl From<nmea0183::GGA> for FixData {
                 nmea0183::GPSQuality::Manual => FixMethod::Manual,
                 nmea0183::GPSQuality::Simulated => FixMethod::Simulation,
             },
-            horizontal_geometry_quality: value.hdop as usize,
+            hdop: value.hdop,
             num_satellites: value.sat_in_use as usize,
+            altitude_meters: value.altitude.map(|a| a.meters),
         }
     }
 }
@@ -84,8 +92,6 @@ pub struct MinNavData {
     pub source: NavSystem,
     pub lat: f64,
     pub lon: f64,
-    pub ns: NS,
-    pub ew: EW,
     pub speed_mph: f32,
     pub course: Option<f32>,
     pub mode: NavMode,
@@ -112,16 +118,6 @@ impl From<nmea0183::RMC> for MinNavData {
             },
             lat: value.latitude.as_f64(),
             lon: value.longitude.as_f64(),
-            ns: match value.latitude.hemisphere {
-                nmea0183::coords::Hemisphere::North => NS::N,
-                nmea0183::coords::Hemisphere::South => NS::S,
-                _ => unreachable!(),
-            },
-            ew: match value.longitude.hemisphere {
-                nmea0183::coords::Hemisphere::East => EW::E,
-                nmea0183::coords::Hemisphere::West => EW::W,
-                _ => unreachable!(),
-            },
             speed_mph: value.speed.as_mph(),
             course: value.course.map(|c| c.degrees),
             mode: match value.mode {
@@ -134,18 +130,6 @@ impl From<nmea0183::RMC> for MinNavData {
             },
         }
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum NS {
-    N,
-    S,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum EW {
-    E,
-    W,
 }
 
 #[derive(Clone, Copy, Debug)]
