@@ -24,14 +24,21 @@ pub fn start(queue: QueueReceiver<FitnessTrackerSentence>) -> thread::JoinHandle
         .name("Task1".to_string())
         .stack_size(6144)
         .spawn(move || loop {
-            let (sentence, _) = queue.recv_front(u32::MAX).unwrap();
-            info!("Received sentence like: {:?}", sentence);
-            match sentence {
-                FitnessTrackerSentence::FixData(fix_data) => {
-                    state.maybe_fix_data = Some(fix_data);
+            let one_second_in_ticks = esp_idf_svc::sys::CONFIG_FREERTOS_HZ;
+            match queue.recv_front(one_second_in_ticks) {
+                Some((sentence, _)) => {
+                    info!("Received sentence like: {:?}", sentence);
+                    match sentence {
+                        FitnessTrackerSentence::FixData(fix_data) => {
+                            state.maybe_fix_data = Some(fix_data);
+                        }
+                        FitnessTrackerSentence::MinNav(min_nav_data) => {
+                            state.maybe_min_nav_data = Some(min_nav_data);
+                        }
+                    }
                 }
-                FitnessTrackerSentence::MinNav(min_nav_data) => {
-                    state.maybe_min_nav_data = Some(min_nav_data);
+                None => {
+                    info!("GPS aggregator status: {:?}", state);
                 }
             }
         })

@@ -1,29 +1,37 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct GPSSentenceState {
-    pub maybe_fix_data: Option<FixData>,
-    pub maybe_min_nav_data: Option<MinNavData>,
+    pub maybe_fix_data: Option<FixQualityData>,
+    pub maybe_min_nav_data: Option<RequiredNavData>,
 }
 
 impl GPSSentenceState {
     pub fn is_complete_reading(&self) -> Option<CompleteGPSReading> {
         match (self.maybe_fix_data, self.maybe_min_nav_data) {
             (Some(fix_data), Some(nav_data)) => {
-                Some(CompleteGPSReading {
-                    timestamp: nav_data.timestamp,
-                    latitude: fix_data.lat,
-                    longitude: fix_data.lon,
-                    altitude_meters: fix_data.altitude_meters,
-                    speed_mph: nav_data.speed_mph,
-                    num_satellites: fix_data.num_satellites,
-                    hdop: fix_data.hdop,
-                    bearing: nav_data.course,
-                })
+                if (fix_data.utc_time - nav_data.timestamp.time()).abs()
+                    > TimeDelta::milliseconds(1500)
+                {
+                    None
+                } else {
+                    Some(CompleteGPSReading {
+                        timestamp: nav_data.timestamp,
+                        latitude: fix_data.lat,
+                        longitude: fix_data.lon,
+                        altitude_meters: fix_data.altitude_meters,
+                        speed_mph: nav_data.speed_mph,
+                        num_satellites: fix_data.num_satellites,
+                        hdop: fix_data.hdop,
+                        bearing: nav_data.course,
+                    })
+                }
             }
             _ => None,
         }
     }
+
+    //pub fn status_message(&self)
 }
 
 pub struct CompleteGPSReading {
@@ -39,12 +47,12 @@ pub struct CompleteGPSReading {
 
 #[derive(Clone, Copy, Debug)]
 pub enum FitnessTrackerSentence {
-    FixData(FixData),
-    MinNav(MinNavData),
+    FixData(FixQualityData),
+    MinNav(RequiredNavData),
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct FixData {
+pub struct FixQualityData {
     pub utc_time: chrono::NaiveTime,
     pub lat: f64,
     pub lon: f64,
@@ -54,7 +62,7 @@ pub struct FixData {
     pub altitude_meters: Option<f32>,
 }
 
-impl From<nmea0183::GGA> for FixData {
+impl From<nmea0183::GGA> for FixQualityData {
     fn from(value: nmea0183::GGA) -> Self {
         let secs = value.time.seconds.trunc() as u32;
         let nanos = (value.time.seconds.fract() * 1_000_000_000.0) as u32;
@@ -87,7 +95,7 @@ impl From<nmea0183::GGA> for FixData {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct MinNavData {
+pub struct RequiredNavData {
     pub timestamp: DateTime<Utc>,
     pub source: NavSystem,
     pub lat: f64,
@@ -97,7 +105,7 @@ pub struct MinNavData {
     pub mode: NavMode,
 }
 
-impl From<nmea0183::RMC> for MinNavData {
+impl From<nmea0183::RMC> for RequiredNavData {
     fn from(value: nmea0183::RMC) -> Self {
         let d = value.datetime.date;
         let t = value.datetime.time;
