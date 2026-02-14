@@ -1,6 +1,6 @@
 use embedded_hal::i2c::I2c;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
-use log::info;
+use log::{error, info, warn};
 use nmea0183::{ParseResult, Parser};
 use std::thread;
 use std::time::Duration;
@@ -54,11 +54,11 @@ pub fn start<I: I2c + Send + 'static>(
                                         .send_back(FitnessTrackerSentence::MinNav(rmc.into()), 0);
                                 }
                                 Ok(ParseResult::GGA(None) | ParseResult::RMC(None)) => {
-                                    info!("GPS: no fix");
+                                    warn!("GPS: no fix");
                                 }
                                 Ok(_) => {}
                                 Err(e) => {
-                                    info!(
+                                    error!(
                                         "NMEA parse error: '{}'.  Sentence: '{}'.",
                                         e,
                                         String::from_utf8_lossy(&buf[..end])
@@ -68,7 +68,7 @@ pub fn start<I: I2c + Send + 'static>(
                         }
                     }
                     Err(_) => {
-                        info!("GPS I2C read error");
+                        error!("GPS I2C read error");
                     }
                 }
 
