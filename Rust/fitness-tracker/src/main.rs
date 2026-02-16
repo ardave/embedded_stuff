@@ -12,7 +12,7 @@ use esp_idf_svc::hal::task::queue::Queue;
 use esp_idf_svc::hal::units::FromValueType;
 use log::info;
 
-use tasks::user_display::{DisplayLine, DisplayMessage};
+use tasks::user_display::DisplayContent;
 use testable_logic::gps_sentence_joining::FitnessTrackerSentence;
 
 fn main() {
@@ -40,24 +40,29 @@ fn main() {
     // Share I2C bus among dependent tasks via Mutex
     let i2c_bus: &'static Mutex<I2cDriver<'static>> = Box::leak(Box::new(Mutex::new(i2c)));
 
-    // Setup display bits:
+    // Setup display:
     let display_i2c = MutexDevice::new(i2c_bus);
-    let display_queue: &'static Queue<DisplayMessage> = Box::leak(Box::new(Queue::new(4)));
+    let display_queue: &'static Queue<DisplayContent> = Box::leak(Box::new(Queue::new(4)));
     let display_queue_receiver = QueueReceiver(display_queue);
     let _display_thread = tasks::user_display::start(display_i2c, display_queue_receiver);
 
-    // Send a test message to verify the display is working
+    // Send initializing message while GPS starts up
     display_queue
-        .send_back(DisplayMessage::Line1(DisplayLine::new("Hello!")), 0)
-        .expect("Failed to enqueue display test message");
+        .send_back(DisplayContent::Initializing, 0)
+        .expect("Failed to enqueue display message");
 
-    // Setup GPS bits:
+    // Setup GPS Acquisition:
     let gps_i2c = MutexDevice::new(i2c_bus);
     let gps_sentence_queue: &'static Queue<FitnessTrackerSentence> =
         Box::leak(Box::new(Queue::new(4)));
     let _gps_acquisition_thread =
         tasks::gps_acquisition::start(gps_i2c, QueueSender(gps_sentence_queue));
-    let _gps_aggregator_thread = tasks::gps_aggregator::start(QueueReceiver(gps_sentence_queue));
+
+    // Setup GPS Aggregation (or, routing):
+    let _gps_aggregator_thread = tasks::gps_aggregator::start(
+        QueueReceiver(gps_sentence_queue),
+        QueueSender(display_queue),
+    );
 
     // Setup SD Card bits:
     //let _sd_card_thread = tasks::sd_card::start(QueueReceiver(gps_reading_queue));

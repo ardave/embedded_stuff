@@ -1,38 +1,40 @@
+use std::time::Instant;
+
 use chrono::{DateTime, TimeDelta, Utc};
 
-#[derive(Default, Debug)]
-pub struct GPSSentenceState {
-    pub maybe_fix_data: Option<FixQualityData>,
-    pub maybe_min_nav_data: Option<RequiredNavData>,
-}
+// #[derive(Default, Debug)]
+// pub struct GPSSentenceState {
+//     pub maybe_fix_data: Option<FixQualityData>,
+//     pub maybe_min_nav_data: Option<RequiredNavData>,
+// }
 
-impl GPSSentenceState {
-    pub fn is_complete_reading(&self) -> Option<CompleteGPSReading> {
-        match (self.maybe_fix_data, self.maybe_min_nav_data) {
-            (Some(fix_data), Some(nav_data)) => {
-                if (fix_data.utc_time - nav_data.timestamp.time()).abs()
-                    > TimeDelta::milliseconds(1500)
-                {
-                    None
-                } else {
-                    Some(CompleteGPSReading {
-                        timestamp: nav_data.timestamp,
-                        latitude: fix_data.lat,
-                        longitude: fix_data.lon,
-                        altitude_meters: fix_data.altitude_meters,
-                        speed_mph: nav_data.speed_mph,
-                        num_satellites: fix_data.num_satellites,
-                        hdop: fix_data.hdop,
-                        bearing: nav_data.course,
-                    })
-                }
-            }
-            _ => None,
-        }
-    }
+// impl GPSSentenceState {
+//     pub fn is_complete_reading(&self) -> Option<CompleteGPSReading> {
+//         match (self.maybe_fix_data, self.maybe_min_nav_data) {
+//             (Some(fix_data), Some(nav_data)) => {
+//                 if (fix_data.utc_time - nav_data.timestamp.time()).abs()
+//                     > TimeDelta::milliseconds(1500)
+//                 {
+//                     None
+//                 } else {
+//                     Some(CompleteGPSReading {
+//                         timestamp: nav_data.timestamp,
+//                         latitude: fix_data.lat,
+//                         longitude: fix_data.lon,
+//                         altitude_meters: fix_data.altitude_meters,
+//                         speed_mph: nav_data.speed_mph,
+//                         num_satellites: fix_data.num_satellites,
+//                         hdop: fix_data.hdop,
+//                         bearing: nav_data.course,
+//                     })
+//                 }
+//             }
+//             _ => None,
+//         }
+//     }
 
-    //pub fn status_message(&self)
-}
+//     //pub fn status_message(&self)
+// }
 
 pub struct CompleteGPSReading {
     pub timestamp: DateTime<Utc>,
@@ -60,6 +62,7 @@ pub struct FixQualityData {
     pub hdop: f32,
     pub num_satellites: usize,
     pub altitude_meters: Option<f32>,
+    pub received_at: Instant,
 }
 
 impl From<nmea0183::GGA> for FixQualityData {
@@ -90,6 +93,7 @@ impl From<nmea0183::GGA> for FixQualityData {
             hdop: value.hdop,
             num_satellites: value.sat_in_use as usize,
             altitude_meters: value.altitude.map(|a| a.meters),
+            received_at: Instant::now(),
         }
     }
 }
@@ -103,6 +107,7 @@ pub struct RequiredNavData {
     pub speed_mph: f32,
     pub course: Option<f32>,
     pub mode: NavMode,
+    pub received_at: Instant,
 }
 
 impl From<nmea0183::RMC> for RequiredNavData {
@@ -136,6 +141,7 @@ impl From<nmea0183::RMC> for RequiredNavData {
                 nmea0183::Mode::Simulator => NavMode::Simulator,
                 nmea0183::Mode::NotValid => NavMode::NotValid,
             },
+            received_at: Instant::now(),
         }
     }
 }

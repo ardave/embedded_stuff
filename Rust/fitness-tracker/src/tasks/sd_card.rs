@@ -1,6 +1,5 @@
 use crate::QueueReceiver;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
-use log::info;
 use std::thread;
 use testable_logic::gps_sentence_joining::FitnessTrackerSentence;
 

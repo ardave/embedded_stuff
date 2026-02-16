@@ -8,42 +8,12 @@ use embedded_graphics::text::Text;
 use embedded_hal::i2c::I2c;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::info;
+use std::fmt::Write;
 use std::thread;
-
-pub const MAX_LINE_LEN: usize = 12; // 128px / 10px per char (FONT_10X20)
-
-#[derive(Clone, Copy)]
-pub struct DisplayLine {
-    buf: [u8; MAX_LINE_LEN],
-    len: u8,
-}
-
-impl DisplayLine {
-    pub fn new(s: &str) -> Self {
-        let mut buf = [0u8; MAX_LINE_LEN];
-        let len = s.len().min(MAX_LINE_LEN);
-        buf[..len].copy_from_slice(&s.as_bytes()[..len]);
-        Self {
-            buf,
-            len: len as u8,
-        }
-    }
-
-    pub fn as_str(&self) -> &str {
-        core::str::from_utf8(&self.buf[..self.len as usize]).unwrap_or("")
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Clone, Copy)]
-pub enum DisplayMessage {
-    Line1(DisplayLine),
-    Line2(DisplayLine),
-}
 
 pub fn start<I: I2c + Send + 'static>(
     i2c: I,
-    queue: QueueReceiver<DisplayMessage>,
+    queue: QueueReceiver<DisplayContent>,
 ) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Display\0"),
@@ -72,21 +42,43 @@ pub fn start<I: I2c + Send + 'static>(
             display.clear_buffer();
             let _ = display.flush();
 
-            let mut line1 = DisplayLine::new("");
-            let mut line2 = DisplayLine::new("");
-
             let style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
 
+            let mut line_buf = [0u8; 13]; // MAX_LINE_LEN + 1 for safety
+
             loop {
-                let (msg, _) = queue.recv_front(u32::MAX).unwrap();
-                match msg {
-                    DisplayMessage::Line1(l) => line1 = l,
-                    DisplayMessage::Line2(l) => line2 = l,
-                }
+                let (display_content, _) = queue.recv_front(u32::MAX).unwrap();
 
                 display.clear_buffer();
-                let _ = Text::new(line1.as_str(), Point::new(0, 30), style).draw(&mut display);
-                let _ = Text::new(line2.as_str(), Point::new(0, 64), style).draw(&mut display);
+
+                match display_content {
+                    DisplayContent::Initializing => {
+                        let _ = Text::new("Waiting", Point::new(0, 30), style).draw(&mut display);
+                        let _ =
+                            Text::new("for GPS...", Point::new(0, 64), style).draw(&mut display);
+                    }
+                    DisplayContent::PositionFix(mph, sats) => {
+                        if let Some(MPH(speed)) = mph {
+                            let s = format_to_buf(&mut line_buf, |w| {
+                                write!(w, "{:.1} mph", speed)
+                            });
+                            let _ = Text::new(s, Point::new(0, 30), style).draw(&mut display);
+                        } else {
+                            let _ = Text::new("-- mph", Point::new(0, 30), style)
+                                .draw(&mut display);
+                        }
+                        if let Some(NumSatellites(n)) = sats {
+                            let s =
+                                format_to_buf(&mut line_buf, |w| write!(w, "{} sats", n));
+                            let _ = Text::new(s, Point::new(0, 64), style).draw(&mut display);
+                        }
+                    }
+                    DisplayContent::LostSignal => {
+                        let _ = Text::new("Signal", Point::new(0, 30), style).draw(&mut display);
+                        let _ =
+                            Text::new("lost", Point::new(0, 64), style).draw(&mut display);
+                    }
+                }
 
                 if let Err(e) = display.flush() {
                     info!("[Display] flush error: {:?}", e);
@@ -94,4 +86,48 @@ pub fn start<I: I2c + Send + 'static>(
             }
         })
         .expect("Failed to spawn Display task")
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum DisplayContent {
+    Initializing,
+    PositionFix(Option<MPH>, Option<NumSatellites>),
+    LostSignal,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MPH(pub f32);
+
+#[derive(Clone, Copy, Debug)]
+pub struct NumSatellites(pub usize);
+
+struct BufWriter<'a> {
+    buf: &'a mut [u8],
+    pos: usize,
+}
+
+impl<'a> BufWriter<'a> {
+    fn new(buf: &'a mut [u8]) -> Self {
+        Self { buf, pos: 0 }
+    }
+}
+
+impl std::fmt::Write for BufWriter<'_> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        let bytes = s.as_bytes();
+        let remaining = self.buf.len() - self.pos;
+        let len = bytes.len().min(remaining);
+        self.buf[self.pos..self.pos + len].copy_from_slice(&bytes[..len]);
+        self.pos += len;
+        Ok(())
+    }
+}
+
+fn format_to_buf<'a>(buf: &'a mut [u8], f: impl FnOnce(&mut BufWriter) -> std::fmt::Result) -> &'a str {
+    let mut writer = BufWriter::new(buf);
+    let _ = f(&mut writer);
+    let len = writer.pos;
+    // SAFETY: writer is dropped here, releasing the mutable borrow on buf
+    drop(writer);
+    core::str::from_utf8(&buf[..len]).unwrap_or("")
 }
