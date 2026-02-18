@@ -18,7 +18,7 @@ pub fn start<I: I2c + Send + 'static>(
     ThreadSpawnConfiguration {
         name: Some(b"Display\0"),
         stack_size: 8192,
-        priority: 4,
+        priority: 9,
         inherit: false,
         pin_to_core: None,
         ..Default::default()
@@ -51,24 +51,22 @@ pub fn start<I: I2c + Send + 'static>(
 
                 display.clear_buffer();
 
-                let DisplayContent { mph, num_satellites } = display_content;
+                let DisplayContent {
+                    mph,
+                    num_satellites,
+                } = display_content;
 
                 if let Some(MPH(speed)) = mph {
-                    let s = format_to_buf(&mut line_buf, |w| {
-                        write!(w, "{:.1} mph", speed)
-                    });
+                    let s = format_to_buf(&mut line_buf, |w| write!(w, "{:.1} mph", speed));
                     let _ = Text::new(s, Point::new(0, 30), style).draw(&mut display);
                 } else {
-                    let _ =
-                        Text::new("-- mph", Point::new(0, 30), style).draw(&mut display);
+                    let _ = Text::new("-- mph", Point::new(0, 30), style).draw(&mut display);
                 }
                 if let Some(NumSatellites(n)) = num_satellites {
-                    let s =
-                        format_to_buf(&mut line_buf, |w| write!(w, "{} sats", n));
+                    let s = format_to_buf(&mut line_buf, |w| write!(w, "{} sats", n));
                     let _ = Text::new(s, Point::new(0, 64), style).draw(&mut display);
                 } else {
-                    let _ =
-                        Text::new("-- sats", Point::new(0, 64), style).draw(&mut display);
+                    let _ = Text::new("-- sats", Point::new(0, 64), style).draw(&mut display);
                 }
 
                 if let Err(e) = display.flush() {
@@ -113,7 +111,10 @@ impl std::fmt::Write for BufWriter<'_> {
     }
 }
 
-fn format_to_buf<'a>(buf: &'a mut [u8], f: impl FnOnce(&mut BufWriter) -> std::fmt::Result) -> &'a str {
+fn format_to_buf<'a>(
+    buf: &'a mut [u8],
+    f: impl FnOnce(&mut BufWriter) -> std::fmt::Result,
+) -> &'a str {
     let mut writer = BufWriter::new(buf);
     let _ = f(&mut writer);
     let len = writer.pos;
