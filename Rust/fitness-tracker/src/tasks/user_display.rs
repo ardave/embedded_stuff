@@ -51,33 +51,24 @@ pub fn start<I: I2c + Send + 'static>(
 
                 display.clear_buffer();
 
-                match display_content {
-                    DisplayContent::Initializing => {
-                        let _ = Text::new("Waiting", Point::new(0, 30), style).draw(&mut display);
-                        let _ =
-                            Text::new("for GPS...", Point::new(0, 64), style).draw(&mut display);
-                    }
-                    DisplayContent::PositionFix(mph, sats) => {
-                        if let Some(MPH(speed)) = mph {
-                            let s = format_to_buf(&mut line_buf, |w| {
-                                write!(w, "{:.1} mph", speed)
-                            });
-                            let _ = Text::new(s, Point::new(0, 30), style).draw(&mut display);
-                        } else {
-                            let _ = Text::new("-- mph", Point::new(0, 30), style)
-                                .draw(&mut display);
-                        }
-                        if let Some(NumSatellites(n)) = sats {
-                            let s =
-                                format_to_buf(&mut line_buf, |w| write!(w, "{} sats", n));
-                            let _ = Text::new(s, Point::new(0, 64), style).draw(&mut display);
-                        }
-                    }
-                    DisplayContent::LostSignal => {
-                        let _ = Text::new("Signal", Point::new(0, 30), style).draw(&mut display);
-                        let _ =
-                            Text::new("lost", Point::new(0, 64), style).draw(&mut display);
-                    }
+                let DisplayContent { mph, num_satellites } = display_content;
+
+                if let Some(MPH(speed)) = mph {
+                    let s = format_to_buf(&mut line_buf, |w| {
+                        write!(w, "{:.1} mph", speed)
+                    });
+                    let _ = Text::new(s, Point::new(0, 30), style).draw(&mut display);
+                } else {
+                    let _ =
+                        Text::new("-- mph", Point::new(0, 30), style).draw(&mut display);
+                }
+                if let Some(NumSatellites(n)) = num_satellites {
+                    let s =
+                        format_to_buf(&mut line_buf, |w| write!(w, "{} sats", n));
+                    let _ = Text::new(s, Point::new(0, 64), style).draw(&mut display);
+                } else {
+                    let _ =
+                        Text::new("-- sats", Point::new(0, 64), style).draw(&mut display);
                 }
 
                 if let Err(e) = display.flush() {
@@ -89,10 +80,9 @@ pub fn start<I: I2c + Send + 'static>(
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum DisplayContent {
-    Initializing,
-    PositionFix(Option<MPH>, Option<NumSatellites>),
-    LostSignal,
+pub struct DisplayContent {
+    pub mph: Option<MPH>,
+    pub num_satellites: Option<NumSatellites>,
 }
 
 #[derive(Clone, Copy, Debug)]

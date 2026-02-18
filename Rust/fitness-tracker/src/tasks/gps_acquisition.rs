@@ -47,23 +47,27 @@ pub fn start<I: I2c + Send + 'static>(
                             match result {
                                 Ok(ParseResult::GGA(Some(gga))) => {
                                     let _ = sentence_queue
-                                        .send_back(FitnessTrackerSentence::FixData(gga.into()), 0);
+                                        .send_back(FitnessTrackerSentence::FixData(gga.into()), 0)
+                                        .map_err(|_| {
+                                            error!(
+                                                "Error enqueueing FitnessTrackerSentence::FixData"
+                                            )
+                                        });
                                 }
                                 Ok(ParseResult::RMC(Some(rmc))) => {
                                     let _ = sentence_queue
-                                        .send_back(FitnessTrackerSentence::MinNav(rmc.into()), 0);
+                                        .send_back(FitnessTrackerSentence::MinNav(rmc.into()), 0)
+                                        .map_err(|_| {
+                                            error!(
+                                                "Error enqueueing FitnessTrackerSentence::MinNav"
+                                            )
+                                        });
                                 }
                                 Ok(ParseResult::GGA(None) | ParseResult::RMC(None)) => {
                                     warn!("GPS: no fix");
                                 }
                                 Ok(_) => {}
-                                Err(e) => {
-                                    error!(
-                                        "NMEA parse error: '{}'.  Sentence: '{}'.",
-                                        e,
-                                        String::from_utf8_lossy(&buf[..end])
-                                    );
-                                }
+                                Err(_) => error!("NMEA parse error.",),
                             }
                         }
                     }

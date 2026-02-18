@@ -46,9 +46,15 @@ fn main() {
     let display_queue_receiver = QueueReceiver(display_queue);
     let _display_thread = tasks::user_display::start(display_i2c, display_queue_receiver);
 
-    // Send initializing message while GPS starts up
+    // Send initial dashes while GPS starts up
     display_queue
-        .send_back(DisplayContent::Initializing, 0)
+        .send_back(
+            DisplayContent {
+                mph: None,
+                num_satellites: None,
+            },
+            0,
+        )
         .expect("Failed to enqueue display message");
 
     // Setup GPS Acquisition:

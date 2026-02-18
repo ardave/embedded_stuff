@@ -55,6 +55,10 @@ pub fn start(
                 }
                 None => {
                     info!("GPS aggregator status: {:?}", state);
+                    let display_content = state_to_display_content(&state);
+                    let _ = display_queue
+                        .send_back(display_content, one_second_in_ticks)
+                        .map_err(|_| error!("Error enqueueing DisplayContent."));
                 }
             }
         })
@@ -67,13 +71,16 @@ fn state_to_display_content(
     let now = Instant::now();
     let maybe_mph = state
         .0
-        .filter(|req| now - req.received_at < Duration::from_millis(1500))
+        .filter(|req| now - req.received_at < Duration::from_millis(5000))
         .map(|req| MPH(req.speed_mph));
 
     let maybe_num_sats = state
         .1
-        .filter(|qual| now - qual.received_at < Duration::from_millis(1500))
+        .filter(|qual| now - qual.received_at < Duration::from_millis(5000))
         .map(|qual| NumSatellites(qual.num_satellites));
 
-    DisplayContent::PositionFix(maybe_mph, maybe_num_sats)
+    DisplayContent {
+        mph: maybe_mph,
+        num_satellites: maybe_num_sats,
+    }
 }
