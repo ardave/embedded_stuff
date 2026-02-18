@@ -32,7 +32,7 @@ pub fn start(
     let mut state: (Option<RequiredNavData>, Option<FixQualityData>) = (None, None);
 
     thread::Builder::new()
-        .name("Task1".to_string())
+        .name("tasks::gps_aggregator".to_string())
         .stack_size(6144)
         .spawn(move || loop {
             let one_second_in_ticks = esp_idf_svc::sys::CONFIG_FREERTOS_HZ;
@@ -49,6 +49,8 @@ pub fn start(
                     }
 
                     let display_content = state_to_display_content(&state);
+                    let _ = display_queue.overwrite(display_content);
+
                     let _ = display_queue
                         .send_back(display_content, one_second_in_ticks)
                         .map_err(|_| error!("Error enqueueing DisplayContent."));
