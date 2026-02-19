@@ -42,7 +42,7 @@ fn main() {
 
     // Setup display:
     let display_i2c = MutexDevice::new(i2c_bus);
-    let display_queue: &'static Queue<DisplayContent> = Box::leak(Box::new(Queue::new(4)));
+    let display_queue: &'static Queue<DisplayContent> = Box::leak(Box::new(Queue::new(1)));
     let display_queue_receiver = QueueReceiver(display_queue);
     let _display_thread = tasks::user_display::start(display_i2c, display_queue_receiver);
 
@@ -93,6 +93,17 @@ pub struct QueueReceiver<T: 'static>(&'static Queue<T>);
 impl<T: Copy> QueueSender<T> {
     pub fn send_back(&self, item: T, timeout: u32) -> Result<bool, esp_idf_svc::sys::EspError> {
         self.0.send_back(item, timeout)
+    }
+
+    pub fn overwrite(&self, item: T) {
+        unsafe {
+            esp_idf_svc::sys::xQueueGenericSend(
+                self.0.as_raw(),
+                &item as *const T as *const _,
+                0, // timeout irrelevant for overwrite
+                2, // queueOVERWRITE
+            );
+        }
     }
 }
 

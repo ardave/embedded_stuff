@@ -49,20 +49,14 @@ pub fn start(
                     }
 
                     let display_content = state_to_display_content(&state);
-                    let _ = display_queue.overwrite(display_content);
-
-                    let _ = display_queue
-                        .send_back(display_content, one_second_in_ticks)
-                        .map_err(|_| error!("Error enqueueing DisplayContent."));
+                    display_queue.overwrite(display_content);
                 }
                 None => {
                     info!("GPS aggregator status: {:?}", state);
-                    let display_content = state_to_display_content(&state);
-                    let _ = display_queue
-                        .send_back(display_content, one_second_in_ticks)
-                        .map_err(|_| error!("Error enqueueing DisplayContent."));
                 }
             }
+            let display_content = state_to_display_content(&state);
+            display_queue.overwrite(display_content);
         })
         .expect("Failed to spawn Task1")
 }
