@@ -33,7 +33,7 @@ fn main() {
         peripherals.i2c0,
         peripherals.pins.gpio3, // SDA
         peripherals.pins.gpio4, // SCL
-        &I2cConfig::new().baudrate(100.kHz().into()),
+        &I2cConfig::new().baudrate(200.kHz().into()),
     )
     .expect("Failed to init I2C");
 
