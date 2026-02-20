@@ -36,16 +36,19 @@ Multiple projects using `esp-idf-svc` and `esp-idf-hal` crates, demonstrating:
 - Protocol Buffers for efficient data serialization
 - Deep sleep for battery-powered applications
 
-### Modern C++ on ESP32
+# C on STM32
+Interpreting signals from rotary encoder
+
+### C on ESP32
 ESP-IDF projects using C++17/20 features:
-- RAII wrappers for GPIO and FreeRTOS primitives
+- Interactions with GPIO and FreeRTOS primitives
 - Type-safe interrupt handling with queues
 - Clean separation of concerns
 
 ### ROS2 Integration
 Component-based ROS2 nodes demonstrating:
-- Camera capture with OpenCV integration
-- Sensor data fusion (GPS + imagery)
+- Camera capture via OpenCV
+- Sensor data fusion (GPS + imagery) (forthcoming)
 - Publisher/subscriber patterns
 
 ### MicroPython
