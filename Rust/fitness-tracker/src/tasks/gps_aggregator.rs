@@ -47,23 +47,18 @@ pub fn start(
                             state.0 = Some(required_nav_data);
                         }
                     }
-
-                    let display_content = state_to_display_content(&state);
-                    display_queue.overwrite(display_content);
                 }
                 None => {
                     info!("GPS aggregator status: {:?}", state);
                 }
             }
-            let display_content = state_to_display_content(&state);
+            let display_content = to_display_content(&state);
             display_queue.overwrite(display_content);
         })
         .expect("Failed to spawn Task1")
 }
 
-fn state_to_display_content(
-    state: &(Option<RequiredNavData>, Option<FixQualityData>),
-) -> DisplayContent {
+fn to_display_content(state: &(Option<RequiredNavData>, Option<FixQualityData>)) -> DisplayContent {
     let now = Instant::now();
     let maybe_mph = state
         .0
