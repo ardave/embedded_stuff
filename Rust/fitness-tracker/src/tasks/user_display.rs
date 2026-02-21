@@ -51,22 +51,26 @@ pub fn start<I: I2c + Send + 'static>(
 
                 display.clear_buffer();
 
-                let DisplayContent {
-                    mph,
-                    num_satellites,
-                } = display_content;
-
-                if let Some(MPH(speed)) = mph {
-                    let s = format_to_buf(&mut line_buf, |w| write!(w, "{:.1} mph", speed));
-                    let _ = Text::new(s, Point::new(0, 30), style).draw(&mut display);
-                } else {
-                    let _ = Text::new("-- mph", Point::new(0, 30), style).draw(&mut display);
-                }
-                if let Some(NumSatellites(n)) = num_satellites {
-                    let s = format_to_buf(&mut line_buf, |w| write!(w, "{} sats", n));
-                    let _ = Text::new(s, Point::new(0, 64), style).draw(&mut display);
-                } else {
-                    let _ = Text::new("-- sats", Point::new(0, 64), style).draw(&mut display);
+                match display_content {
+                    DisplayContent::Reading(mph, num_satellites) => {
+                        if let Some(MPH(speed)) = mph {
+                            let s = format_to_buf(&mut line_buf, |w| write!(w, "{:.1} mph", speed));
+                            let _ = Text::new(s, Point::new(0, 30), style).draw(&mut display);
+                        } else {
+                            let _ =
+                                Text::new("-- mph", Point::new(0, 30), style).draw(&mut display);
+                        }
+                        if let Some(NumSatellites(n)) = num_satellites {
+                            let s = format_to_buf(&mut line_buf, |w| write!(w, "{} sats", n));
+                            let _ = Text::new(s, Point::new(0, 64), style).draw(&mut display);
+                        } else {
+                            let _ =
+                                Text::new("-- sats", Point::new(0, 64), style).draw(&mut display);
+                        }
+                    }
+                    DisplayContent::GPSError => {
+                        let _ = Text::new("GPS Err", Point::new(0, 30), style).draw(&mut display);
+                    }
                 }
 
                 if let Err(e) = display.flush() {
@@ -77,10 +81,16 @@ pub fn start<I: I2c + Send + 'static>(
         .expect("Failed to spawn Display task")
 }
 
+// #[derive(Clone, Copy, Debug)]
+// pub struct DisplayContent {
+//     pub mph: Option<MPH>,
+//     pub num_satellites: Option<NumSatellites>,
+// }
+
 #[derive(Clone, Copy, Debug)]
-pub struct DisplayContent {
-    pub mph: Option<MPH>,
-    pub num_satellites: Option<NumSatellites>,
+pub enum DisplayContent {
+    Reading(Option<MPH>, Option<NumSatellites>),
+    GPSError,
 }
 
 #[derive(Clone, Copy, Debug)]

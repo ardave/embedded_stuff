@@ -1,5 +1,8 @@
 use crate::{
-    tasks::user_display::{DisplayContent, NumSatellites, MPH},
+    tasks::{
+        gps_acquisition::GPSAcquisitionError,
+        user_display::{DisplayContent, NumSatellites, MPH},
+    },
     QueueReceiver, QueueSender,
 };
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
@@ -15,7 +18,7 @@ use testable_logic::gps_sentence_joining::{
 // Combines GGA and RMEA sentences, provided that they are timely enough, before sending
 // the joined Reading to downstream Queue(s)
 pub fn start(
-    sentence_queue: QueueReceiver<FitnessTrackerSentence>,
+    sentence_queue: QueueReceiver<Result<FitnessTrackerSentence, GPSAcquisitionError>>,
     display_queue: QueueSender<DisplayContent>,
 ) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
@@ -29,7 +32,8 @@ pub fn start(
     .set()
     .expect("Failed to set Task1 thread config");
 
-    let mut state: (Option<RequiredNavData>, Option<FixQualityData>) = (None, None);
+    let mut state: Result<(Option<RequiredNavData>, Option<FixQualityData>), GPSAcquisitionError> =
+        Ok((None, None));
 
     thread::Builder::new()
         .name("tasks::gps_aggregator".to_string())
@@ -37,15 +41,22 @@ pub fn start(
         .spawn(move || loop {
             let one_second_in_ticks = esp_idf_svc::sys::CONFIG_FREERTOS_HZ;
             match sentence_queue.recv_front(one_second_in_ticks) {
-                Some((sentence, _)) => {
-                    info!("Received sentence like: {:?}", sentence);
-                    match sentence {
-                        FitnessTrackerSentence::FixData(fix_quality_data) => {
-                            state.1 = Some(fix_quality_data);
+                Some((sentence_result, _)) => {
+                    info!("Received sentence result like: {:?}", sentence_result);
+
+                    match sentence_result {
+                        Ok(sentence) => {
+                            let (existing_nav, existing_fix) = state.unwrap_or((None, None));
+                            match sentence {
+                                FitnessTrackerSentence::FixData(fix_quality_data) => {
+                                    state = Ok((existing_nav, Some(fix_quality_data)));
+                                }
+                                FitnessTrackerSentence::MinNav(required_nav_data) => {
+                                    state = Ok((Some(required_nav_data), existing_fix));
+                                }
+                            }
                         }
-                        FitnessTrackerSentence::MinNav(required_nav_data) => {
-                            state.0 = Some(required_nav_data);
-                        }
+                        Err(e) => state = Err(e),
                     }
                 }
                 None => {
@@ -58,20 +69,24 @@ pub fn start(
         .expect("Failed to spawn Task1")
 }
 
-fn to_display_content(state: &(Option<RequiredNavData>, Option<FixQualityData>)) -> DisplayContent {
-    let now = Instant::now();
-    let maybe_mph = state
-        .0
-        .filter(|req| now - req.received_at < Duration::from_millis(5000))
-        .map(|req| MPH(req.speed_mph));
+fn to_display_content(
+    state: &Result<(Option<RequiredNavData>, Option<FixQualityData>), GPSAcquisitionError>,
+) -> DisplayContent {
+    match state {
+        Ok(state) => {
+            let now = Instant::now();
+            let maybe_mph = state
+                .0
+                .filter(|req| now - req.received_at < Duration::from_millis(5000))
+                .map(|req| MPH(req.speed_mph));
 
-    let maybe_num_sats = state
-        .1
-        .filter(|qual| now - qual.received_at < Duration::from_millis(5000))
-        .map(|qual| NumSatellites(qual.num_satellites));
+            let maybe_num_sats = state
+                .1
+                .filter(|qual| now - qual.received_at < Duration::from_millis(5000))
+                .map(|qual| NumSatellites(qual.num_satellites));
 
-    DisplayContent {
-        mph: maybe_mph,
-        num_satellites: maybe_num_sats,
+            DisplayContent::Reading(maybe_mph, maybe_num_sats)
+        }
+        Err(_gps_acquisition_error) => DisplayContent::GPSError,
     }
 }

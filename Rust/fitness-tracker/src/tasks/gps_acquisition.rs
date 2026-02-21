@@ -14,7 +14,7 @@ const PADDING_BYTE: u8 = 0x0A;
 
 pub fn start<I: I2c + Send + 'static>(
     mut i2c: I,
-    sentence_queue: QueueSender<FitnessTrackerSentence>,
+    sentence_queue: QueueSender<Result<FitnessTrackerSentence, GPSAcquisitionError>>,
 ) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"GPS\0"),
@@ -47,7 +47,10 @@ pub fn start<I: I2c + Send + 'static>(
                             match result {
                                 Ok(ParseResult::GGA(Some(gga))) => {
                                     let _ = sentence_queue
-                                        .send_back(FitnessTrackerSentence::FixData(gga.into()), 0)
+                                        .send_back(
+                                            Ok(FitnessTrackerSentence::FixData(gga.into())),
+                                            0,
+                                        )
                                         .map_err(|_| {
                                             error!(
                                                 "Error enqueueing FitnessTrackerSentence::FixData"
@@ -56,7 +59,10 @@ pub fn start<I: I2c + Send + 'static>(
                                 }
                                 Ok(ParseResult::RMC(Some(rmc))) => {
                                     let _ = sentence_queue
-                                        .send_back(FitnessTrackerSentence::MinNav(rmc.into()), 0)
+                                        .send_back(
+                                            Ok(FitnessTrackerSentence::MinNav(rmc.into())),
+                                            0,
+                                        )
                                         .map_err(|_| {
                                             error!(
                                                 "Error enqueueing FitnessTrackerSentence::MinNav"
@@ -67,12 +73,20 @@ pub fn start<I: I2c + Send + 'static>(
                                     warn!("GPS: no fix");
                                 }
                                 Ok(_) => {}
-                                Err(_) => error!("NMEA parse error.",),
+                                Err(_) => {
+                                    error!("NMEA parse error.",);
+                                    let _ = sentence_queue
+                                        .send_back(Err(GPSAcquisitionError::NMEAParseError), 0)
+                                        .map_err(|_| error!("Error enqueueing NMEA parse error."));
+                                }
                             }
                         }
                     }
                     Err(_) => {
                         error!("GPS I2C read error");
+                        let _ = sentence_queue
+                            .send_back(Err(GPSAcquisitionError::I2cReadError), 0)
+                            .map_err(|_| error!("Error enqueueing GPS I2C read error."));
                     }
                 }
 
@@ -80,4 +94,10 @@ pub fn start<I: I2c + Send + 'static>(
             }
         })
         .expect("Failed to spawn GPS task")
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum GPSAcquisitionError {
+    I2cReadError,
+    NMEAParseError,
 }

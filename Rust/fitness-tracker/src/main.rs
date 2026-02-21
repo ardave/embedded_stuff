@@ -15,6 +15,8 @@ use log::info;
 use tasks::user_display::DisplayContent;
 use testable_logic::gps_sentence_joining::FitnessTrackerSentence;
 
+use crate::tasks::gps_acquisition::GPSAcquisitionError;
+
 fn main() {
     thread::sleep(Duration::from_secs(5));
     esp_idf_svc::sys::link_patches();
@@ -48,18 +50,12 @@ fn main() {
 
     // Send initial dashes while GPS starts up
     display_queue
-        .send_back(
-            DisplayContent {
-                mph: None,
-                num_satellites: None,
-            },
-            0,
-        )
+        .send_back(DisplayContent::Reading(None, None), 0)
         .expect("Failed to enqueue display message");
 
     // Setup GPS Acquisition:
     let gps_i2c = MutexDevice::new(i2c_bus);
-    let gps_sentence_queue: &'static Queue<FitnessTrackerSentence> =
+    let gps_sentence_queue: &'static Queue<Result<FitnessTrackerSentence, GPSAcquisitionError>> =
         Box::leak(Box::new(Queue::new(4)));
     let _gps_acquisition_thread =
         tasks::gps_acquisition::start(gps_i2c, QueueSender(gps_sentence_queue));
