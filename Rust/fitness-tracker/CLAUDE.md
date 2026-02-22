@@ -40,7 +40,7 @@ cat /dev/cu.usbmodem01
 
 ## Architecture
 
-This is an embedded Rust firmware for an **Adafruit ESP32-S2 Feather** with a **PA1010D GPS module** (UART, GPIO 39 TX / GPIO 38 RX) and an **Adafruit Monochrome 1.12" 128x128 OLED Display (SH1107, Product ID 5297)** connected via I2C (STEMMA QT). It uses the `esp-idf-svc` HAL with FreeRTOS threading — not async/Embassy.
+This is an embedded Rust firmware for an **Adafruit ESP32-S2 Feather** with a **PA1010D GPS module** (UART, GPIO 39 TX / GPIO 38 RX), an **Adafruit Monochrome 1.12" 128x128 OLED Display (SH1107, Product ID 5297)** connected via I2C (STEMMA QT), and an **Adafruit Micro SD Breakout (PID 4682)** connected via SPI (GPIO 36/35/37/10). It uses the `esp-idf-svc` HAL with FreeRTOS threading — not async/Embassy.
 
 ### Task model
 
@@ -76,6 +76,7 @@ The subcrate has its own `.cargo/config.toml` that overrides the build target to
 | --------------------------- | ---- | --------- | -------------------------------- | -------------- | ------------------------------------------------- |
 | SH1107 128×128 OLED Display | 5297 | I2C       | STEMMA QT (GPIO3 SDA, GPIO4 SCL) | 0x3D           | A0 jumper open (default)                          |
 | PA1010D Mini GPS            | 4415 | UART      | GPIO39 TX → RXI, GPIO38 RX ← TXO | 9600 8N1       | Cross-connect: board TX↔GPS RXI, board RX↔GPS TXO |
+| Micro SD Breakout           | 4682 | SPI       | GPIO36 SCK, GPIO35 MOSI, GPIO37 MISO, GPIO10 CS, GPIO6 DET | —  | 3 V only; uses default hardware SPI bus            |
 
 #### I2C Bus (STEMMA QT)
 
@@ -95,6 +96,31 @@ The subcrate has its own `.cargo/config.toml` that overrides the build target to
 | RX     | 38   | Board receive ← GPS TXO  |
 
 The ESP32-S2 GPIO matrix allows any GPIO to serve as UART TX/RX; GPIO 39/38 are the designated serial header pins on this Feather and are not used by USB CDC.
+
+#### SPI Bus (Feather header — default hardware SPI)
+
+| Signal | GPIO | Notes                                          |
+| ------ | ---- | ---------------------------------------------- |
+| SCK    | 36   | SPI clock                                      |
+| MOSI   | 35   | Master Out / Slave In (labeled MO on Feather)  |
+| MISO   | 37   | Master In / Slave Out (labeled MI on Feather)  |
+| CS     | 10   | Active-low chip select for SD card breakout    |
+
+GPIO 36/35/37 are the ESP32-S2's default high-speed SPI peripheral pins exposed on the Feather header. GPIO 10 (D10) is an unused general-purpose digital pin on the right header, chosen for CS because it has no conflicting alternate function.
+
+#### Micro SD Breakout (PID 4682) Pins
+
+| Breakout Pin | Function             | Feather Connection                          |
+| ------------ | -------------------- | ------------------------------------------- |
+| 3V           | Power in             | Feather 3V3 pin (3.3 V only — no 5 V!)     |
+| GND          | Ground               | Feather GND pin                             |
+| CLK          | SPI clock input      | GPIO 36 (SCK)                               |
+| SI           | SPI data in (MOSI)   | GPIO 35 (MOSI/MO)                           |
+| SO           | SPI data out (MISO)  | GPIO 37 (MISO/MI)                           |
+| CS           | Chip select (active low) | GPIO 10 (D10)                            |
+| DET          | Card detect          | GPIO 6 (D6); switch shorts to GND when card inserted; use internal pull-up |
+
+> **3 V ONLY** — this breakout has no level shifter or regulator. Power and all logic pins must be 3.3 V; connecting 5 V will damage the SD card.
 
 #### PA1010D GPS Module (PID 4415) Breakout Pins
 
