@@ -1,19 +1,17 @@
-use embedded_hal::i2c::I2c;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
-use log::{error, info, warn};
+use esp_idf_svc::hal::uart::UartDriver;
+use log::{error, warn};
 use nmea0183::{ParseResult, Parser};
 use std::thread;
-use std::time::Duration;
 use testable_logic::gps_sentence_joining::FitnessTrackerSentence;
 
 use crate::QueueSender;
 
-const PA1010D_ADDR: u8 = 0x10;
 const GPS_BUF_SIZE: usize = 255;
-const PADDING_BYTE: u8 = 0x0A;
+const UART_READ_TIMEOUT_TICKS: u32 = 20;
 
-pub fn start<I: I2c + Send + 'static>(
-    mut i2c: I,
+pub fn start(
+    uart: UartDriver<'static>,
     sentence_queue: QueueSender<Result<FitnessTrackerSentence, GPSAcquisitionError>>,
 ) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
@@ -35,15 +33,10 @@ pub fn start<I: I2c + Send + 'static>(
             let mut buf = [0u8; GPS_BUF_SIZE];
 
             loop {
-                match i2c.read(PA1010D_ADDR, &mut buf) {
-                    Ok(()) => {
-                        let end = buf
-                            .iter()
-                            .rposition(|&b| b != PADDING_BYTE)
-                            .map(|i| (i + 2).min(buf.len()))
-                            .unwrap_or(0);
-
-                        for result in parser.parse_from_bytes(&buf[..end]) {
+                match uart.read(&mut buf, UART_READ_TIMEOUT_TICKS) {
+                    Ok(0) => {}
+                    Ok(n) => {
+                        for result in parser.parse_from_bytes(&buf[..n]) {
                             match result {
                                 Ok(ParseResult::GGA(Some(gga))) => {
                                     let _ = sentence_queue
@@ -82,15 +75,14 @@ pub fn start<I: I2c + Send + 'static>(
                             }
                         }
                     }
+                    Err(e) if e.code() == esp_idf_svc::sys::ESP_ERR_TIMEOUT => {}
                     Err(_) => {
-                        error!("GPS I2C read error");
+                        error!("GPS UART read error");
                         let _ = sentence_queue
-                            .send_back(Err(GPSAcquisitionError::I2cReadError), 0)
-                            .map_err(|_| error!("Error enqueueing GPS I2C read error."));
+                            .send_back(Err(GPSAcquisitionError::UartReadError), 0)
+                            .map_err(|_| error!("Error enqueueing GPS UART read error."));
                     }
                 }
-
-                thread::sleep(Duration::from_millis(100));
             }
         })
         .expect("Failed to spawn GPS task")
@@ -98,6 +90,6 @@ pub fn start<I: I2c + Send + 'static>(
 
 #[derive(Clone, Copy, Debug)]
 pub enum GPSAcquisitionError {
-    I2cReadError,
+    UartReadError,
     NMEAParseError,
 }

@@ -1,14 +1,13 @@
 mod tasks;
 
-use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
-use embedded_hal_bus::i2c::MutexDevice;
-use esp_idf_svc::hal::gpio::PinDriver;
+use esp_idf_svc::hal::gpio::{AnyIOPin, PinDriver};
 use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::hal::task::queue::Queue;
+use esp_idf_svc::hal::uart::{self, UartDriver};
 use esp_idf_svc::hal::units::FromValueType;
 use log::info;
 
@@ -39,26 +38,33 @@ fn main() {
     )
     .expect("Failed to init I2C");
 
-    // Share I2C bus among dependent tasks via Mutex
-    let i2c_bus: &'static Mutex<I2cDriver<'static>> = Box::leak(Box::new(Mutex::new(i2c)));
-
-    // Setup display:
-    let display_i2c = MutexDevice::new(i2c_bus);
+    // Setup display (sole I2C consumer):
     let display_queue: &'static Queue<DisplayContent> = Box::leak(Box::new(Queue::new(1)));
     let display_queue_receiver = QueueReceiver(display_queue);
-    let _display_thread = tasks::user_display::start(display_i2c, display_queue_receiver);
+    let _display_thread = tasks::user_display::start(i2c, display_queue_receiver);
 
     // Send initial dashes while GPS starts up
     display_queue
         .send_back(DisplayContent::Reading(None, None), 0)
         .expect("Failed to enqueue display message");
 
+    // Setup UART for GPS (PA1010D on UART1, 9600 8N1):
+    let uart_config = uart::config::Config::new().baudrate(esp_idf_svc::hal::units::Hertz(9600));
+    let gps_uart = UartDriver::new(
+        peripherals.uart1,
+        peripherals.pins.gpio39, // TX → GPS RXI
+        peripherals.pins.gpio38, // RX ← GPS TXO
+        Option::<AnyIOPin>::None,
+        Option::<AnyIOPin>::None,
+        &uart_config,
+    )
+    .expect("Failed to init UART1 for GPS");
+
     // Setup GPS Acquisition:
-    let gps_i2c = MutexDevice::new(i2c_bus);
     let gps_sentence_queue: &'static Queue<Result<FitnessTrackerSentence, GPSAcquisitionError>> =
         Box::leak(Box::new(Queue::new(4)));
     let _gps_acquisition_thread =
-        tasks::gps_acquisition::start(gps_i2c, QueueSender(gps_sentence_queue));
+        tasks::gps_acquisition::start(gps_uart, QueueSender(gps_sentence_queue));
 
     // Setup GPS Aggregation (or, routing):
     let _gps_aggregator_thread = tasks::gps_aggregator::start(
