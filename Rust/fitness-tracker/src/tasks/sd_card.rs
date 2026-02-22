@@ -24,15 +24,6 @@ pub fn start(queue: QueueReceiver<FitnessTrackerSentence>) -> thread::JoinHandle
                 Some((FitnessTrackerSentence::MinNav(nav), _)) => { /* use nav */ }
                 None => { /* handle None */ }
             }
-            // info!(
-            //     "[Task2] lat={:.6} lon={:.6} alt={:.1}m sats={} spd={:.1}kn crs={:.1}",
-            //     reading.latitude,
-            //     reading.longitude,
-            //     reading.altitude_m,
-            //     reading.satellite_count,
-            //     reading.speed_knots,
-            //     reading.course_degrees,
-            // );
         })
         .expect("Failed to spawn Task2")
 }

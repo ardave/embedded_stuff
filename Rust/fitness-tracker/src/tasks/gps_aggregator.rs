@@ -6,7 +6,7 @@ use crate::{
     QueueReceiver, QueueSender,
 };
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
-use log::{error, info};
+use log::info;
 use std::{
     thread,
     time::{Duration, Instant},
