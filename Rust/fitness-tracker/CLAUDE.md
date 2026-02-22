@@ -40,7 +40,7 @@ cat /dev/cu.usbmodem01
 
 ## Architecture
 
-This is an embedded Rust firmware for an **Adafruit ESP32-S2 Feather** with a **PA1010D GPS module** (I2C) and an **Adafruit Monochrome 1.12" 128x128 OLED Display (SH1107, Product ID 5297)** connected via STEMMA QT. It uses the `esp-idf-svc` HAL with FreeRTOS threading — not async/Embassy.
+This is an embedded Rust firmware for an **Adafruit ESP32-S2 Feather** with a **PA1010D GPS module** (UART, GPIO 39 TX / GPIO 38 RX) and an **Adafruit Monochrome 1.12" 128x128 OLED Display (SH1107, Product ID 5297)** connected via I2C (STEMMA QT). It uses the `esp-idf-svc` HAL with FreeRTOS threading — not async/Embassy.
 
 ### Task model
 
@@ -65,6 +65,51 @@ GPS task (pri 10) ──GpsSentence──▶ Task1 (pri 5)   logs individual GGA
 The main crate re-exports these types from `src/tasks/gps.rs` via `pub use testable_logic::{...}`, so consumers (`task1.rs`, `task2.rs`, `main.rs`) import from `crate::tasks::gps`.
 
 The subcrate has its own `.cargo/config.toml` that overrides the build target to the host architecture, allowing `cargo test` to work without the ESP toolchain's linker.
+
+## Wiring & Pinout Reference
+
+### Board: Adafruit ESP32-S2 Feather (PID 5000)
+
+#### Device Connections
+
+| Device                          | PID  | Interface | Bus / Pins                         | Address / Baud | Notes                                    |
+|---------------------------------|------|-----------|------------------------------------|----------------|------------------------------------------|
+| SH1107 128×128 OLED Display    | 5297 | I2C       | STEMMA QT (GPIO3 SDA, GPIO4 SCL)  | 0x3D           | A0 jumper open (default)                 |
+| PA1010D Mini GPS                | 4415 | UART      | GPIO39 TX → RXI, GPIO38 RX ← TXO  | 9600 8N1       | Cross-connect: board TX↔GPS RXI, board RX↔GPS TXO |
+
+#### I2C Bus (STEMMA QT)
+
+| Signal | GPIO | Notes                                      |
+|--------|------|--------------------------------------------|
+| SDA    | 3    | 5 kΩ pull-up on board                      |
+| SCL    | 4    | 5 kΩ pull-up on board                      |
+| Power  | 7    | Must drive HIGH to enable (Rev C); wait ≥250 ms before I2C traffic |
+| VCC    | —    | 3.3 V via STEMMA QT connector              |
+| GND    | —    | Via STEMMA QT connector                    |
+
+#### UART (Feather header)
+
+| Signal | GPIO | Notes                                      |
+|--------|------|--------------------------------------------|
+| TX     | 39   | Board transmit → GPS RXI                   |
+| RX     | 38   | Board receive ← GPS TXO                    |
+
+The ESP32-S2 GPIO matrix allows any GPIO to serve as UART TX/RX; GPIO 39/38 are the designated serial header pins on this Feather and are not used by USB CDC.
+
+#### PA1010D GPS Module (PID 4415) Breakout Pins
+
+| Pin  | Function              | Notes                                      |
+|------|-----------------------|--------------------------------------------|
+| VIN  | Power in              | 3–5 V (connect to Feather 3.3 V or USB 5 V) |
+| GND  | Ground                | Common ground with Feather                 |
+| TXO  | UART transmit (out)   | 3.3 V logic; connect to Feather RX (GPIO 38) |
+| RXI  | UART receive (in)     | Level-shifted 3–5 V; connect to Feather TX (GPIO 39) |
+| 3Vo  | 3.3 V regulator out   | Output from on-board LDO                   |
+| PPS  | Pulse-per-second      | 3.3 V; pulses high ~50–100 ms at 1 Hz when fix acquired |
+| RST  | Reset                 | Pull low to reset GPS chip                 |
+| WAKE | Wake / standby        | For low-power mode                         |
+| SCL  | I2C clock             | 10 kΩ pull-up; not used in UART config     |
+| SDA  | I2C data              | 10 kΩ pull-up; not used in UART config     |
 
 ## ESP-IDF / Hardware Details
 
