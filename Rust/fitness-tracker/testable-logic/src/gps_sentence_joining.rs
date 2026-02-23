@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use chrono::{DateTime, TimeDelta, Utc};
+use chrono::{DateTime, Utc};
 
 // #[derive(Default, Debug)]
 // pub struct GPSSentenceState {

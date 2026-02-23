@@ -53,7 +53,7 @@ pub fn start<I: I2c + Send + 'static>(
 
                 match display_content {
                     DisplayContent::Reading(mph, num_satellites) => {
-                        if let Some(MPH(speed)) = mph {
+                        if let Some(Mph(speed)) = mph {
                             let s = format_to_buf(&mut line_buf, |w| write!(w, "{:.1} mph", speed));
                             let _ = Text::new(s, Point::new(0, 30), style).draw(&mut display);
                         } else {
@@ -89,12 +89,12 @@ pub fn start<I: I2c + Send + 'static>(
 
 #[derive(Clone, Copy, Debug)]
 pub enum DisplayContent {
-    Reading(Option<MPH>, Option<NumSatellites>),
+    Reading(Option<Mph>, Option<NumSatellites>),
     GPSError,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct MPH(pub f32);
+pub struct Mph(pub f32);
 
 #[derive(Clone, Copy, Debug)]
 pub struct NumSatellites(pub usize);
@@ -121,14 +121,14 @@ impl std::fmt::Write for BufWriter<'_> {
     }
 }
 
-fn format_to_buf<'a>(
-    buf: &'a mut [u8],
+fn format_to_buf(
+    buf: &mut [u8],
     f: impl FnOnce(&mut BufWriter) -> std::fmt::Result,
-) -> &'a str {
-    let mut writer = BufWriter::new(buf);
-    let _ = f(&mut writer);
-    let len = writer.pos;
-    // SAFETY: writer is dropped here, releasing the mutable borrow on buf
-    drop(writer);
+) -> &str {
+    let len = {
+        let mut writer = BufWriter::new(buf);
+        let _ = f(&mut writer);
+        writer.pos
+    };
     core::str::from_utf8(&buf[..len]).unwrap_or("")
 }

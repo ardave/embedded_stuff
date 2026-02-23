@@ -3,9 +3,11 @@ mod tasks;
 use std::thread;
 use std::time::Duration;
 
-use esp_idf_svc::hal::gpio::{AnyIOPin, PinDriver};
+use esp_idf_svc::hal::gpio::{AnyIOPin, PinDriver, Pull};
 use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::hal::spi::config::{DriverConfig, MODE_0};
+use esp_idf_svc::hal::spi::{Dma, SpiDeviceDriver, SpiDriver};
 use esp_idf_svc::hal::task::queue::Queue;
 use esp_idf_svc::hal::uart::{self, UartDriver};
 use esp_idf_svc::hal::units::FromValueType;
@@ -66,14 +68,46 @@ fn main() {
     let _gps_acquisition_thread =
         tasks::gps_acquisition::start(gps_uart, QueueSender(gps_sentence_queue));
 
+    // Setup SD Card SPI bus (GPIO 36 SCK, 35 MOSI, 37 MISO):
+    let spi_driver = SpiDriver::new(
+        peripherals.spi2,
+        peripherals.pins.gpio36, // SCK
+        peripherals.pins.gpio35, // MOSI
+        Some(peripherals.pins.gpio37), // MISO
+        &DriverConfig::new().dma(Dma::Disabled),
+    )
+    .expect("Failed to init SPI bus");
+
+    let spi_device = SpiDeviceDriver::new(
+        spi_driver,
+        Some(peripherals.pins.gpio10), // CS
+        &esp_idf_svc::hal::spi::config::Config::new()
+            .baudrate(400.kHz().into())
+            .data_mode(MODE_0),
+    )
+    .expect("Failed to init SPI device");
+
+    // Card detect pin (GPIO 6): shorts to GND when card inserted, pull-up when absent
+    let mut card_detect =
+        PinDriver::input(peripherals.pins.gpio6).expect("Failed to init card detect pin");
+    card_detect
+        .set_pull(Pull::Up)
+        .expect("Failed to set card detect pull-up");
+
+    // SD card queue
+    let sd_card_queue: &'static Queue<FitnessTrackerSentence> =
+        Box::leak(Box::new(Queue::new(8)));
+
     // Setup GPS Aggregation (or, routing):
     let _gps_aggregator_thread = tasks::gps_aggregator::start(
         QueueReceiver(gps_sentence_queue),
         QueueSender(display_queue),
+        QueueSender(sd_card_queue),
     );
 
-    // Setup SD Card bits:
-    //let _sd_card_thread = tasks::sd_card::start(QueueReceiver(gps_reading_queue));
+    // Setup SD Card logging:
+    let _sd_card_thread =
+        tasks::sd_card::start(spi_device, card_detect, QueueReceiver(sd_card_queue));
 
     // Keep power_pin alive so it stays HIGH
     loop {
@@ -112,7 +146,7 @@ impl<T: Copy> QueueSender<T> {
 /// Log the minimum free stack (bytes) each FreeRTOS task has ever had.
 /// A value approaching zero means that task is close to overflowing.
 fn log_stack_high_water_marks() {
-    const TASK_NAMES: &[&[u8]] = &[b"GPS\0", b"Display\0", b"Task1\0", b"Task2\0"];
+    const TASK_NAMES: &[&[u8]] = &[b"GPS\0", b"Display\0", b"Task1\0", b"SDCard\0"];
     for name in TASK_NAMES {
         unsafe {
             let handle = esp_idf_svc::sys::xTaskGetHandle(name.as_ptr() as *const _);

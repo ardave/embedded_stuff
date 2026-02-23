@@ -1,7 +1,7 @@
 use crate::{
     tasks::{
         gps_acquisition::GPSAcquisitionError,
-        user_display::{DisplayContent, NumSatellites, MPH},
+        user_display::{DisplayContent, NumSatellites, Mph},
     },
     QueueReceiver, QueueSender,
 };
@@ -20,6 +20,7 @@ use testable_logic::gps_sentence_joining::{
 pub fn start(
     sentence_queue: QueueReceiver<Result<FitnessTrackerSentence, GPSAcquisitionError>>,
     display_queue: QueueSender<DisplayContent>,
+    sd_card_queue: QueueSender<FitnessTrackerSentence>,
 ) -> thread::JoinHandle<()> {
     ThreadSpawnConfiguration {
         name: Some(b"Task1\0"),
@@ -55,6 +56,8 @@ pub fn start(
                                     state = Ok((Some(required_nav_data), existing_fix));
                                 }
                             }
+                            // Fan out to SD card (non-blocking; drop if queue full)
+                            let _ = sd_card_queue.send_back(sentence, 0);
                         }
                         Err(e) => state = Err(e),
                     }
@@ -78,7 +81,7 @@ fn to_display_content(
             let maybe_mph = state
                 .0
                 .filter(|req| now - req.received_at < Duration::from_millis(5000))
-                .map(|req| MPH(req.speed_mph));
+                .map(|req| Mph(req.speed_mph));
 
             let maybe_num_sats = state
                 .1
