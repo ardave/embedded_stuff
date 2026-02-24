@@ -5,8 +5,8 @@ A collection of embedded systems projects demonstrating proficiency across multi
 ## Skills Demonstrated
 
 - **Languages**: C, C++, Rust, Python (MicroPython)
-- **Platforms**: ESP32 (ESP32-C3, ESP32 Pico), ROS2
-- **Concepts**: GPIO interrupts, I2C communication, sensor integration, FreeRTOS, real-time systems, WiFi networking, power management (deep sleep), Protocol Buffers
+- **Platforms**: STM32, ESP32, ROS2
+- **Concepts**: GPIO interrupts, I2C, SPI and UART communication, sensor integration, FreeRTOS, real-time systems, WiFi networking, power management (deep sleep), Protocol Buffers
 - **Hardware**: BME280 (temperature/humidity/pressure), ICM-20948 (9-axis IMU), SH1107 OLED displays, WS2812 NeoPixel LEDs, GPS modules, USB cameras
 
 ## Project Structure
@@ -40,7 +40,7 @@ Multiple projects using `esp-idf-svc` and `esp-idf-hal` crates, demonstrating:
 Interpreting signals from rotary encoder
 
 ### C on ESP32
-ESP-IDF projects using C++17/20 features:
+ESP-IDF projects using C:
 - Interactions with GPIO and FreeRTOS primitives
 - Type-safe interrupt handling with queues
 - Clean separation of concerns
