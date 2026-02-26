@@ -2,12 +2,11 @@ use core::fmt::Write as _;
 use std::thread;
 use std::time::Duration;
 
-use embedded_hal::digital::InputPin;
 use embedded_hal::spi::SpiDevice;
 use embedded_sdmmc::{SdCard, VolumeIdx, VolumeManager};
 use esp_idf_svc::hal::delay::Ets;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
-use log::{error, info, warn};
+use log::{error, info};
 use testable_logic::gps_sentence_joining::{
     FixMethod, FitnessTrackerSentence, NavMode, NavSystem,
 };
@@ -29,14 +28,12 @@ impl embedded_sdmmc::TimeSource for DummyTimesource {
     }
 }
 
-pub fn start<SPI, CD>(
+pub fn start<SPI>(
     spi: SPI,
-    card_detect: CD,
     queue: QueueReceiver<FitnessTrackerSentence>,
 ) -> thread::JoinHandle<()>
 where
     SPI: SpiDevice<u8> + Send + 'static,
-    CD: InputPin + Send + 'static,
 {
     ThreadSpawnConfiguration {
         name: Some(b"SDCard\0"),
@@ -53,10 +50,6 @@ where
         .name("SDCard".to_string())
         .stack_size(8192)
         .spawn(move || {
-            let mut card_detect = card_detect;
-            // Wait for card insertion before initializing
-            wait_for_card(&mut card_detect, &queue);
-
             info!("SD card detected, initializing...");
             let sdcard = SdCard::new(spi, Ets);
 
@@ -72,7 +65,7 @@ where
 
             let mut volume_mgr = VolumeManager::new(sdcard, DummyTimesource);
             loop {
-                match log_to_file(&mut volume_mgr, &mut card_detect, &queue) {
+                match log_to_file(&mut volume_mgr, &queue) {
                     Ok(()) => info!("SD: file session closed normally"),
                     Err(e) => {
                         error!("SD write error: {}", e);
@@ -84,77 +77,81 @@ where
         .expect("Failed to spawn SDCard")
 }
 
-fn wait_for_card<CD>(card_detect: &mut CD, queue: &QueueReceiver<FitnessTrackerSentence>)
-where
-    CD: InputPin,
-{
-    loop {
-        // DET pin shorts to GND when card inserted; internal pull-up makes it HIGH when absent
-        if card_detect.is_low().unwrap_or(false) {
-            return;
-        }
-        info!("SD: waiting for card...");
-        thread::sleep(Duration::from_secs(2));
-        // Drain queued items while waiting so we don't block producers
-        while queue.recv_front(0).is_some() {}
-    }
-}
-
-fn log_to_file<D, CD>(
+fn log_to_file<D>(
     volume_mgr: &mut VolumeManager<D, DummyTimesource>,
-    card_detect: &mut CD,
     queue: &QueueReceiver<FitnessTrackerSentence>,
 ) -> Result<(), &'static str>
 where
     D: embedded_sdmmc::BlockDevice,
     <D as embedded_sdmmc::BlockDevice>::Error: core::fmt::Debug,
-    CD: InputPin,
 {
-    let raw_vol = volume_mgr
-        .open_raw_volume(VolumeIdx(0))
-        .map_err(|_| "Failed to open volume")?;
-    let raw_dir = volume_mgr
-        .open_root_dir(raw_vol)
-        .map_err(|_| "Failed to open root dir")?;
+    let raw_vol = volume_mgr.open_raw_volume(VolumeIdx(0)).map_err(|e| {
+        error!("Failed to open volume: {:?}", e);
+        "Failed to open volume"
+    })?;
+    let raw_dir = volume_mgr.open_root_dir(raw_vol).map_err(|e| {
+        error!("Failed to open root dir: {:?}", e);
+        let _ = volume_mgr.close_volume(raw_vol);
+        "Failed to open root dir"
+    })?;
+
+    // Create ACTIVITY subdirectory (8.3 name limit; ignore "already exists" error)
+    match volume_mgr.make_dir_in_dir(raw_dir, "ACTIVITY") {
+        Ok(()) => info!("SD: created ACTIVITY directory"),
+        Err(embedded_sdmmc::Error::DirAlreadyExists) => {
+            info!("SD: ACTIVITY directory already exists");
+        }
+        Err(e) => {
+            error!("SD: failed to create ACTIVITY dir: {:?}", e);
+            let _ = volume_mgr.close_dir(raw_dir);
+            let _ = volume_mgr.close_volume(raw_vol);
+            return Err("Failed to create ACTIVITY dir");
+        }
+    }
+
+    let activities_dir = volume_mgr
+        .open_dir(raw_dir, "ACTIVITY")
+        .map_err(|e| {
+            error!("Failed to open ACTIVITY dir: {:?}", e);
+            let _ = volume_mgr.close_dir(raw_dir);
+            let _ = volume_mgr.close_volume(raw_vol);
+            "Failed to open ACTIVITY dir"
+        })?;
+
     let raw_file = volume_mgr
         .open_file_in_dir(
-            raw_dir,
+            activities_dir,
             "GPS_LOG.TXT",
             embedded_sdmmc::Mode::ReadWriteCreateOrAppend,
         )
-        .map_err(|_| "Failed to open GPS_LOG.TXT")?;
+        .map_err(|e| {
+            error!("Failed to open GPS_LOG.TXT: {:?}", e);
+            let _ = volume_mgr.close_dir(activities_dir);
+            let _ = volume_mgr.close_dir(raw_dir);
+            let _ = volume_mgr.close_volume(raw_vol);
+            "Failed to open GPS_LOG.TXT"
+        })?;
 
-    info!("SD: GPS_LOG.TXT opened for append");
+    info!("SD: ACTIVITY/GPS_LOG.TXT opened for append");
 
-    let mut write_count: u32 = 0;
     let one_second_in_ticks = esp_idf_svc::sys::CONFIG_FREERTOS_HZ;
 
     loop {
-        // Check card is still present
-        if card_detect.is_high().unwrap_or(false) {
-            warn!("SD card removed!");
-            let _ = volume_mgr.close_file(raw_file);
-            let _ = volume_mgr.close_dir(raw_dir);
-            let _ = volume_mgr.close_volume(raw_vol);
-            return Err("Card removed");
-        }
-
         if let Some((sentence, _)) = queue.recv_front(one_second_in_ticks) {
             let mut buf = [0u8; 256];
             let len = format_json_line(&sentence, &mut buf);
             if len > 0 {
                 if volume_mgr.write(raw_file, &buf[..len]).is_err() {
                     let _ = volume_mgr.close_file(raw_file);
+                    let _ = volume_mgr.close_dir(activities_dir);
                     let _ = volume_mgr.close_dir(raw_dir);
                     let _ = volume_mgr.close_volume(raw_vol);
                     return Err("Write failed");
                 }
-                write_count += 1;
 
-                if write_count % 10 == 0
-                    && volume_mgr.flush_file(raw_file).is_err()
-                {
+                if volume_mgr.flush_file(raw_file).is_err() {
                     let _ = volume_mgr.close_file(raw_file);
+                    let _ = volume_mgr.close_dir(activities_dir);
                     let _ = volume_mgr.close_dir(raw_dir);
                     let _ = volume_mgr.close_volume(raw_vol);
                     return Err("Flush failed");

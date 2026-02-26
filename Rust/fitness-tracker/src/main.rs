@@ -3,7 +3,7 @@ mod tasks;
 use std::thread;
 use std::time::Duration;
 
-use esp_idf_svc::hal::gpio::{AnyIOPin, PinDriver, Pull};
+use esp_idf_svc::hal::gpio::{AnyIOPin, PinDriver};
 use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::hal::spi::config::{DriverConfig, MODE_0};
@@ -71,8 +71,8 @@ fn main() {
     // Setup SD Card SPI bus (GPIO 36 SCK, 35 MOSI, 37 MISO):
     let spi_driver = SpiDriver::new(
         peripherals.spi2,
-        peripherals.pins.gpio36, // SCK
-        peripherals.pins.gpio35, // MOSI
+        peripherals.pins.gpio36,       // SCK
+        peripherals.pins.gpio35,       // MOSI
         Some(peripherals.pins.gpio37), // MISO
         &DriverConfig::new().dma(Dma::Disabled),
     )
@@ -82,21 +82,13 @@ fn main() {
         spi_driver,
         Some(peripherals.pins.gpio10), // CS
         &esp_idf_svc::hal::spi::config::Config::new()
-            .baudrate(400.kHz().into())
+            .baudrate(100.kHz().into())
             .data_mode(MODE_0),
     )
     .expect("Failed to init SPI device");
 
-    // Card detect pin (GPIO 6): shorts to GND when card inserted, pull-up when absent
-    let mut card_detect =
-        PinDriver::input(peripherals.pins.gpio6).expect("Failed to init card detect pin");
-    card_detect
-        .set_pull(Pull::Up)
-        .expect("Failed to set card detect pull-up");
-
     // SD card queue
-    let sd_card_queue: &'static Queue<FitnessTrackerSentence> =
-        Box::leak(Box::new(Queue::new(8)));
+    let sd_card_queue: &'static Queue<FitnessTrackerSentence> = Box::leak(Box::new(Queue::new(8)));
 
     // Setup GPS Aggregation (or, routing):
     let _gps_aggregator_thread = tasks::gps_aggregator::start(
@@ -106,12 +98,11 @@ fn main() {
     );
 
     // Setup SD Card logging:
-    let _sd_card_thread =
-        tasks::sd_card::start(spi_device, card_detect, QueueReceiver(sd_card_queue));
+    let _sd_card_thread = tasks::sd_card::start(spi_device, QueueReceiver(sd_card_queue));
 
     // Keep power_pin alive so it stays HIGH
     loop {
-        log_stack_high_water_marks();
+        //log_stack_high_water_marks();
         thread::sleep(Duration::from_secs(2));
     }
 }
