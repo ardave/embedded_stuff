@@ -3,12 +3,15 @@ mod tasks;
 use std::thread;
 use std::time::Duration;
 
-use esp_idf_svc::hal::gpio::{AnyIOPin, PinDriver};
+#[cfg(not(feature = "fake-gps"))]
+use esp_idf_svc::hal::gpio::AnyIOPin;
+use esp_idf_svc::hal::gpio::PinDriver;
 use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::hal::spi::config::{DriverConfig, MODE_0};
 use esp_idf_svc::hal::spi::{Dma, SpiDeviceDriver, SpiDriver};
 use esp_idf_svc::hal::task::queue::Queue;
+#[cfg(not(feature = "fake-gps"))]
 use esp_idf_svc::hal::uart::{self, UartDriver};
 use esp_idf_svc::hal::units::FromValueType;
 use log::info;
@@ -50,23 +53,28 @@ fn main() {
         .send_back(DisplayContent::Reading(None, None), 0)
         .expect("Failed to enqueue display message");
 
-    // Setup UART for GPS (PA1010D on UART1, 9600 8N1):
-    let uart_config = uart::config::Config::new().baudrate(esp_idf_svc::hal::units::Hertz(9600));
-    let gps_uart = UartDriver::new(
-        peripherals.uart1,
-        peripherals.pins.gpio39, // TX → GPS RXI
-        peripherals.pins.gpio38, // RX ← GPS TXO
-        Option::<AnyIOPin>::None,
-        Option::<AnyIOPin>::None,
-        &uart_config,
-    )
-    .expect("Failed to init UART1 for GPS");
-
     // Setup GPS Acquisition:
     let gps_sentence_queue: &'static Queue<Result<FitnessTrackerSentence, GPSAcquisitionError>> =
         Box::leak(Box::new(Queue::new(4)));
-    let _gps_acquisition_thread =
-        tasks::gps_acquisition::start(gps_uart, QueueSender(gps_sentence_queue));
+
+    #[cfg(not(feature = "fake-gps"))]
+    let _gps_acquisition_thread = {
+        let uart_config =
+            uart::config::Config::new().baudrate(esp_idf_svc::hal::units::Hertz(9600));
+        let gps_uart = UartDriver::new(
+            peripherals.uart1,
+            peripherals.pins.gpio39, // TX → GPS RXI
+            peripherals.pins.gpio38, // RX ← GPS TXO
+            Option::<AnyIOPin>::None,
+            Option::<AnyIOPin>::None,
+            &uart_config,
+        )
+        .expect("Failed to init UART1 for GPS");
+        tasks::gps_acquisition::start(gps_uart, QueueSender(gps_sentence_queue))
+    };
+
+    #[cfg(feature = "fake-gps")]
+    let _gps_acquisition_thread = tasks::fake_gps::start(QueueSender(gps_sentence_queue));
 
     // Setup SD Card SPI bus (GPIO 36 SCK, 35 MOSI, 37 MISO):
     let spi_driver = SpiDriver::new(

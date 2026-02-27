@@ -1,5 +1,7 @@
 pub mod activity_state;
 pub mod battery_monitor;
+#[cfg(feature = "fake-gps")]
+pub mod fake_gps;
 pub mod gps_acquisition;
 pub mod gps_aggregator;
 pub mod sd_card;

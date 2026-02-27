@@ -19,6 +19,7 @@ opt-level = "z"
 
 [features]
 default = []
+fake-gps = []
 
 experimental = ["esp-idf-svc/experimental"]
 
