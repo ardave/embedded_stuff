@@ -3,16 +3,16 @@ mod tasks;
 use std::thread;
 use std::time::Duration;
 
-#[cfg(not(feature = "fake-gps"))]
-use esp_idf_svc::hal::gpio::AnyIOPin;
 use esp_idf_svc::hal::gpio::PinDriver;
+#[cfg(not(feature = "fake-gps"))]
+use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio38, Gpio39};
 use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::hal::spi::config::{DriverConfig, MODE_0};
 use esp_idf_svc::hal::spi::{Dma, SpiDeviceDriver, SpiDriver};
 use esp_idf_svc::hal::task::queue::Queue;
 #[cfg(not(feature = "fake-gps"))]
-use esp_idf_svc::hal::uart::{self, UartDriver};
+use esp_idf_svc::hal::uart::{self, UartDriver, UART1};
 use esp_idf_svc::hal::units::FromValueType;
 use log::info;
 
@@ -57,24 +57,15 @@ fn main() {
     let gps_sentence_queue: &'static Queue<Result<FitnessTrackerSentence, GPSAcquisitionError>> =
         Box::leak(Box::new(Queue::new(4)));
 
-    #[cfg(not(feature = "fake-gps"))]
-    let _gps_acquisition_thread = {
-        let uart_config =
-            uart::config::Config::new().baudrate(esp_idf_svc::hal::units::Hertz(9600));
-        let gps_uart = UartDriver::new(
-            peripherals.uart1,
-            peripherals.pins.gpio39, // TX → GPS RXI
-            peripherals.pins.gpio38, // RX ← GPS TXO
-            Option::<AnyIOPin>::None,
-            Option::<AnyIOPin>::None,
-            &uart_config,
-        )
-        .expect("Failed to init UART1 for GPS");
-        tasks::gps_acquisition::start(gps_uart, QueueSender(gps_sentence_queue))
-    };
-
-    #[cfg(feature = "fake-gps")]
-    let _gps_acquisition_thread = tasks::fake_gps::start(QueueSender(gps_sentence_queue));
+    let _gps_acquisition_thread = create_gps_acquisition_thread(
+        #[cfg(not(feature = "fake-gps"))]
+        peripherals.uart1,
+        #[cfg(not(feature = "fake-gps"))]
+        peripherals.pins.gpio39,
+        #[cfg(not(feature = "fake-gps"))]
+        peripherals.pins.gpio38,
+        QueueSender(gps_sentence_queue),
+    );
 
     // Setup SD Card SPI bus (GPIO 36 SCK, 35 MOSI, 37 MISO):
     let spi_driver = SpiDriver::new(
@@ -112,6 +103,34 @@ fn main() {
     loop {
         //log_stack_high_water_marks();
         thread::sleep(Duration::from_secs(2));
+    }
+}
+
+fn create_gps_acquisition_thread(
+    #[cfg(not(feature = "fake-gps"))] uart_peripheral: UART1,
+    #[cfg(not(feature = "fake-gps"))] tx_pin: Gpio39,
+    #[cfg(not(feature = "fake-gps"))] rx_pin: Gpio38,
+    sentence_queue: QueueSender<Result<FitnessTrackerSentence, GPSAcquisitionError>>,
+) -> thread::JoinHandle<()> {
+    #[cfg(not(feature = "fake-gps"))]
+    {
+        let uart_config =
+            uart::config::Config::new().baudrate(esp_idf_svc::hal::units::Hertz(9600));
+        let gps_uart = UartDriver::new(
+            uart_peripheral,
+            tx_pin, // TX → GPS RXI
+            rx_pin, // RX ← GPS TXO
+            Option::<AnyIOPin>::None,
+            Option::<AnyIOPin>::None,
+            &uart_config,
+        )
+        .expect("Failed to init UART1 for GPS");
+        tasks::gps_acquisition::start(gps_uart, sentence_queue)
+    }
+
+    #[cfg(feature = "fake-gps")]
+    {
+        tasks::fake_gps::start(sentence_queue)
     }
 }
 

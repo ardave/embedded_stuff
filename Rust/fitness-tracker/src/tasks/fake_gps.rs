@@ -3,11 +3,11 @@ use log::info;
 use std::thread;
 use std::time::{Duration, Instant};
 use testable_logic::gps_sentence_joining::{
-    FixMethod, FixQualityData, FitnessTrackerSentence, NavMode, NavSystem, RequiredNavData,
+    FitnessTrackerSentence, FixMethod, FixQualityData, NavMode, NavSystem, RequiredNavData,
 };
 
-use crate::QueueSender;
 use crate::tasks::gps_acquisition::GPSAcquisitionError;
+use crate::QueueSender;
 
 /// Simulated GPS route point.
 struct RoutePoint {
@@ -21,12 +21,48 @@ struct RoutePoint {
 /// A short loop of points (roughly a lap around a park).
 /// Customize these to whatever location/path you like.
 const ROUTE: &[RoutePoint] = &[
-    RoutePoint { lat: 40.748817, lon: -73.985428, alt_m: 10.0, speed_mph: 3.2, course: Some(90.0) },
-    RoutePoint { lat: 40.748900, lon: -73.985000, alt_m: 10.5, speed_mph: 3.4, course: Some(45.0) },
-    RoutePoint { lat: 40.749100, lon: -73.984600, alt_m: 11.0, speed_mph: 3.1, course: Some(0.0) },
-    RoutePoint { lat: 40.749300, lon: -73.985000, alt_m: 10.8, speed_mph: 3.5, course: Some(315.0) },
-    RoutePoint { lat: 40.749100, lon: -73.985428, alt_m: 10.2, speed_mph: 3.3, course: Some(270.0) },
-    RoutePoint { lat: 40.748817, lon: -73.985428, alt_m: 10.0, speed_mph: 3.2, course: Some(180.0) },
+    RoutePoint {
+        lat: 40.748817,
+        lon: -73.985428,
+        alt_m: 10.0,
+        speed_mph: 3.2,
+        course: Some(90.0),
+    },
+    RoutePoint {
+        lat: 40.748900,
+        lon: -73.985000,
+        alt_m: 10.5,
+        speed_mph: 3.4,
+        course: Some(45.0),
+    },
+    RoutePoint {
+        lat: 40.749100,
+        lon: -73.984600,
+        alt_m: 11.0,
+        speed_mph: 3.1,
+        course: Some(0.0),
+    },
+    RoutePoint {
+        lat: 40.749300,
+        lon: -73.985000,
+        alt_m: 10.8,
+        speed_mph: 3.5,
+        course: Some(315.0),
+    },
+    RoutePoint {
+        lat: 40.749100,
+        lon: -73.985428,
+        alt_m: 10.2,
+        speed_mph: 3.3,
+        course: Some(270.0),
+    },
+    RoutePoint {
+        lat: 40.748817,
+        lon: -73.985428,
+        alt_m: 10.0,
+        speed_mph: 3.2,
+        course: Some(180.0),
+    },
 ];
 
 pub fn start(
@@ -47,7 +83,10 @@ pub fn start(
         .name("GPS".to_string())
         .stack_size(4096)
         .spawn(move || {
-            info!("[FakeGPS] started — cycling through {} route points", ROUTE.len());
+            info!(
+                "[FakeGPS] started — cycling through {} route points",
+                ROUTE.len()
+            );
 
             // Start a few seconds in so the display shows "--" briefly, like a real cold start
             thread::sleep(Duration::from_secs(3));

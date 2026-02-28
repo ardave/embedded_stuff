@@ -121,10 +121,7 @@ impl std::fmt::Write for BufWriter<'_> {
     }
 }
 
-fn format_to_buf(
-    buf: &mut [u8],
-    f: impl FnOnce(&mut BufWriter) -> std::fmt::Result,
-) -> &str {
+fn format_to_buf(buf: &mut [u8], f: impl FnOnce(&mut BufWriter) -> std::fmt::Result) -> &str {
     let len = {
         let mut writer = BufWriter::new(buf);
         let _ = f(&mut writer);

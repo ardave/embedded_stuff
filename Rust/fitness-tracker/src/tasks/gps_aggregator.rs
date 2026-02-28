@@ -1,12 +1,12 @@
 use crate::{
     tasks::{
         gps_acquisition::GPSAcquisitionError,
-        user_display::{DisplayContent, NumSatellites, Mph},
+        user_display::{DisplayContent, Mph, NumSatellites},
     },
     QueueReceiver, QueueSender,
 };
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
-use log::info;
+use log::{debug, info};
 use std::{
     thread,
     time::{Duration, Instant},
@@ -43,7 +43,7 @@ pub fn start(
             let one_second_in_ticks = esp_idf_svc::sys::CONFIG_FREERTOS_HZ;
             match sentence_queue.recv_front(one_second_in_ticks) {
                 Some((sentence_result, _)) => {
-                    info!("Received sentence result like: {:?}", sentence_result);
+                    debug!("Received sentence result like: {:?}", sentence_result);
 
                     match sentence_result {
                         Ok(sentence) => {

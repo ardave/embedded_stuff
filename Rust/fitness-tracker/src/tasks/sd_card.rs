@@ -7,9 +7,7 @@ use embedded_sdmmc::{SdCard, VolumeIdx, VolumeManager};
 use esp_idf_svc::hal::delay::Ets;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::{error, info};
-use testable_logic::gps_sentence_joining::{
-    FixMethod, FitnessTrackerSentence, NavMode, NavSystem,
-};
+use testable_logic::gps_sentence_joining::{FitnessTrackerSentence, FixMethod, NavMode, NavSystem};
 
 use crate::QueueReceiver;
 
@@ -28,10 +26,7 @@ impl embedded_sdmmc::TimeSource for DummyTimesource {
     }
 }
 
-pub fn start<SPI>(
-    spi: SPI,
-    queue: QueueReceiver<FitnessTrackerSentence>,
-) -> thread::JoinHandle<()>
+pub fn start<SPI>(spi: SPI, queue: QueueReceiver<FitnessTrackerSentence>) -> thread::JoinHandle<()>
 where
     SPI: SpiDevice<u8> + Send + 'static,
 {
@@ -50,15 +45,18 @@ where
         .name("SDCard".to_string())
         .stack_size(8192)
         .spawn(move || {
-            info!("SD card detected, initializing...");
             let sdcard = SdCard::new(spi, Ets);
 
-            match sdcard.num_bytes() {
-                Ok(size) => info!("SD card size: {} bytes", size),
-                Err(e) => {
-                    error!("SD card init failed: {:?}", e);
-                    loop {
-                        thread::sleep(Duration::from_secs(10));
+            loop {
+                match sdcard.num_bytes() {
+                    Ok(size) => {
+                        info!("SD card size: {} bytes", size);
+                        break;
+                    }
+                    Err(e) => {
+                        error!("SD card not detected ({:?}), retrying in 5s...", e);
+                        sdcard.mark_card_uninit();
+                        thread::sleep(Duration::from_secs(5));
                     }
                 }
             }
@@ -109,14 +107,12 @@ where
         }
     }
 
-    let activities_dir = volume_mgr
-        .open_dir(raw_dir, "ACTIVITY")
-        .map_err(|e| {
-            error!("Failed to open ACTIVITY dir: {:?}", e);
-            let _ = volume_mgr.close_dir(raw_dir);
-            let _ = volume_mgr.close_volume(raw_vol);
-            "Failed to open ACTIVITY dir"
-        })?;
+    let activities_dir = volume_mgr.open_dir(raw_dir, "ACTIVITY").map_err(|e| {
+        error!("Failed to open ACTIVITY dir: {:?}", e);
+        let _ = volume_mgr.close_dir(raw_dir);
+        let _ = volume_mgr.close_volume(raw_vol);
+        "Failed to open ACTIVITY dir"
+    })?;
 
     let raw_file = volume_mgr
         .open_file_in_dir(
