@@ -6,7 +6,7 @@ use crate::{
     QueueReceiver, QueueSender,
 };
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
-use log::{debug, info};
+use log::{debug, error, info};
 use std::{
     thread,
     time::{Duration, Instant},
@@ -43,7 +43,7 @@ pub fn start(
             let one_second_in_ticks = esp_idf_svc::sys::CONFIG_FREERTOS_HZ;
             match sentence_queue.recv_front(one_second_in_ticks) {
                 Some((sentence_result, _)) => {
-                    debug!("Received sentence result like: {:?}", sentence_result);
+                    log_brief_debug_msg(&sentence_result);
 
                     match sentence_result {
                         Ok(sentence) => {
@@ -91,5 +91,19 @@ fn to_display_content(
             DisplayContent::Reading(maybe_mph, maybe_num_sats)
         }
         Err(_gps_acquisition_error) => DisplayContent::GPSError,
+    }
+}
+
+fn log_brief_debug_msg(result: &Result<FitnessTrackerSentence, GPSAcquisitionError>) {
+    match result {
+        Ok(sentence) => match sentence {
+            FitnessTrackerSentence::FixData(_fix_quality_data) => {
+                info!("Received FixQualityData sentence.")
+            }
+            FitnessTrackerSentence::MinNav(_required_nav_data) => {
+                info!("Received RequiredNavData sentence.")
+            }
+        },
+        Err(gps_acquisition_error) => error!("GPS Acquisition Error: {:?}", gps_acquisition_error),
     }
 }

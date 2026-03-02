@@ -10,8 +10,8 @@ CONFIG_ESP_CONSOLE_USB_CDC=y
 #CONFIG_FREERTOS_HZ=1000
 
 # Set log level to Debug so that debug!() messages are shown
-CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
-CONFIG_LOG_DEFAULT_LEVEL=4
+#CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
+#CONFIG_LOG_DEFAULT_LEVEL=4
 
 # Workaround for https://github.com/espressif/esp-idf/issues/7631
 #CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=n

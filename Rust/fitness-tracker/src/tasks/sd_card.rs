@@ -54,9 +54,9 @@ where
                         break;
                     }
                     Err(e) => {
-                        error!("SD card not detected ({:?}), retrying in 5s...", e);
+                        info!("SD card init attempt failed ({:?}), retrying in 1s...", e);
                         sdcard.mark_card_uninit();
-                        thread::sleep(Duration::from_secs(5));
+                        thread::sleep(Duration::from_secs(1));
                     }
                 }
             }
@@ -144,6 +144,8 @@ where
                     let _ = volume_mgr.close_volume(raw_vol);
                     return Err("Write failed");
                 }
+
+                info!("SD: wrote {} bytes", len);
 
                 if volume_mgr.flush_file(raw_file).is_err() {
                     let _ = volume_mgr.close_file(raw_file);
