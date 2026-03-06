@@ -52,8 +52,12 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
   "socket-udp",
 ] }
 
+embassy-usb = { version = "0.5", default-features = false }
+embassy-futures = "0.1"
+
 critical-section = "1.2.0"
 static_cell      = "2.1.1"
+esp-println = { version = "0.16.1", features = ["esp32s2"] }
 
 
 [profile.dev]

@@ -15,15 +15,41 @@ cargo build
 # Build release
 cargo build --release
 
-# Flash to device and open serial monitor (uses espflash via .cargo/config.toml runner)
-cargo run --release
-
 # Format check
 cargo fmt --all --check
 
 # Lint (CI runs with -D warnings)
 cargo clippy --all-features -- -D warnings
 ```
+
+## Flash to Device
+
+ESP32-S2 native USB requires `--no-stub` and manual bootloader entry. The default flash stub and `espflash monitor` both fail over native USB on this board.
+
+1. Put the board into **bootloader mode**: hold **BOOT**, press **RESET**, release **BOOT**
+2. Flash (one of):
+```bash
+# Via cargo run (uses .cargo/config.toml runner with --no-stub):
+cargo run --release
+
+# Or directly:
+espflash flash --no-stub --before no-reset --port /dev/cu.usbmodem01 --chip esp32s2 target/xtensa-esp32s2-none-elf/release/fitness_tracker_embassy
+```
+> **Note:** Use `--before no-reset` when flashing directly, since the board was manually placed into bootloader mode. `cargo run` uses the runner in `.cargo/config.toml` which omits `--before` (espflash default-reset works when the board is freshly in bootloader mode).
+
+3. Press **RESET** to start the firmware — the device does **not** auto-reset after `--no-stub` flashing.
+
+## Monitor Serial Output
+
+The firmware provides USB CDC serial output via `embassy-usb` CDC ACM class. After pressing RESET and the firmware is running:
+```bash
+tio /dev/cu.usbmodem01
+# or
+cat /dev/cu.usbmodem01
+```
+> The USB CDC device enumerates after firmware boots (press RESET after flashing). The USB serial port may re-enumerate after reset — if `/dev/cu.usbmodem01` is not found, check `ls /dev/cu.usbmodem*` for the new port name. `espflash monitor` does **not** work reliably on this board.
+
+**Early boot logging:** `esp-println` provides `println!` macros routed to UART0. These are only visible with a UART adapter — USB CDC output begins after the USB stack initializes.
 
 ## Toolchain
 
@@ -121,7 +147,7 @@ GPIO 36/35/37 are the ESP32-S2's default high-speed SPI peripheral pins exposed 
 
 - **GPIO7** must be driven HIGH to enable I2C/STEMMA QT power on this board; devices need ≥250ms after power-on before I2C communication
 - **Display:** SH1107 128×128 OLED (Adafruit PID 5297), I2C address **0x3D** (default, A0 open)
-- **Console output** is USB CDC, not UART
+- **Console output** is USB CDC (native USB, not UART). Monitor via `cat /dev/cu.usbmodem01` after firmware boots. `espflash monitor` does not work on this board.
 
 ## Code Conventions
 
