@@ -1,3 +1,7 @@
+[workspace]
+members  = [".", "src/domain"]
+resolver = "3"
+
 [package]
 edition      = "2024"
 name         = "fitness_tracker_embassy"
@@ -6,7 +10,7 @@ version      = "0.1.0"
 
 [[bin]]
 name = "fitness_tracker_embassy"
-path = "./src/bin/main.rs"
+path = "./src/fitness_tracker/main.rs"
 
 [dependencies]
 esp-hal = { version = "~1.0", features = ["esp32s2", "unstable"] }
@@ -58,6 +62,8 @@ embassy-futures = "0.1"
 critical-section = "1.2.0"
 static_cell      = "2.1.1"
 esp-println = { version = "0.16.1", features = ["esp32s2"] }
+domain = { path = "src/domain" }
+embassy-sync = "0.7.2"
 
 
 [profile.dev]

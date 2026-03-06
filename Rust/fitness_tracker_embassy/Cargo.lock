@@ -231,6 +231,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "domain"
+version = "0.1.0"
+
+[[package]]
 name = "embassy-embedded-hal"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -895,9 +899,11 @@ name = "fitness_tracker_embassy"
 version = "0.1.0"
 dependencies = [
  "critical-section",
+ "domain",
  "embassy-executor",
  "embassy-futures",
  "embassy-net",
+ "embassy-sync 0.7.2",
  "embassy-time",
  "embassy-usb",
  "embedded-io 0.7.1",
