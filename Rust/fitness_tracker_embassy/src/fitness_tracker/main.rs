@@ -23,8 +23,8 @@ use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 use static_cell::StaticCell;
 
-pub mod display;
 pub mod sh1107;
+pub mod tasks;
 
 static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent>> =
     StaticCell::new();
@@ -134,7 +134,7 @@ async fn main(spawner: Spawner) -> ! {
     };
 
     spawner
-        .spawn(display::display_task(i2c0, display_signal))
+        .spawn(tasks::display::display_task(i2c0, display_signal))
         .unwrap();
 
     display_signal.signal(DisplayContent::Initialized);
