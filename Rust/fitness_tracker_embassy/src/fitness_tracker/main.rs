@@ -7,16 +7,27 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
+use domain::display_content::DisplayContent;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer};
-use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::Builder;
+use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use esp_hal::clock::CpuClock;
-use esp_hal::otg_fs::asynch::{Config, Driver};
+use esp_hal::i2c::master::Config as I2cConfig;
 use esp_hal::otg_fs::Usb;
+use esp_hal::otg_fs::asynch::{Config as OtgConfig, Driver};
 use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
+use static_cell::StaticCell;
+
+pub mod display;
+pub mod sh1107;
+
+static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent>> =
+    StaticCell::new();
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -34,7 +45,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
     reason = "it's not unusual to allocate larger buffers etc. in main"
 )]
 #[esp_rtos::main]
-async fn main(_spawner: Spawner) -> ! {
+async fn main(spawner: Spawner) -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
@@ -55,13 +66,13 @@ async fn main(_spawner: Spawner) -> ! {
 
     // Create async USB driver
     let mut ep_out_buffer = [0u8; 1024];
-    let driver = Driver::new(usb, &mut ep_out_buffer, Config::default());
+    let driver = Driver::new(usb, &mut ep_out_buffer, OtgConfig::default());
 
     // Configure USB device descriptor
     let mut usb_config = embassy_usb::Config::new(0x303A, 0x3001);
-    usb_config.manufacturer = Some("Espressif");
+    usb_config.manufacturer = Some("Dave Falkner");
     usb_config.product = Some("Fitness Tracker");
-    usb_config.serial_number = Some("12345678");
+    usb_config.serial_number = Some("00000001");
     // Required for Windows composite device compatibility
     usb_config.device_class = 0xEF;
     usb_config.device_sub_class = 0x02;
@@ -75,7 +86,24 @@ async fn main(_spawner: Spawner) -> ! {
 
     let mut state = State::new();
 
-    let mut builder = Builder::new(
+    // Enable I2C / STEMMA QT power (GPIO7 must be HIGH on Adafruit ESP32-S2 Feather Rev C)
+    let _i2c_power = esp_hal::gpio::Output::new(
+        peripherals.GPIO7,
+        esp_hal::gpio::Level::High,
+        esp_hal::gpio::OutputConfig::default(),
+    );
+    Timer::after(Duration::from_millis(250)).await;
+
+    let i2c0_config = I2cConfig::default().with_frequency(esp_hal::time::Rate::from_khz(200));
+    let i2c0 = esp_hal::i2c::master::I2c::new(peripherals.I2C0, i2c0_config)
+        .unwrap()
+        .with_sda(peripherals.GPIO3)
+        .with_scl(peripherals.GPIO4)
+        .into_async();
+
+    let display_signal = DISPLAY_SIGNAL.init(Signal::new());
+
+    let mut usb_builder = Builder::new(
         driver,
         usb_config,
         &mut config_descriptor,
@@ -85,9 +113,9 @@ async fn main(_spawner: Spawner) -> ! {
     );
 
     // Create CDC ACM serial class (max packet size 64)
-    let mut class = CdcAcmClass::new(&mut builder, &mut state, 64);
+    let mut class = CdcAcmClass::new(&mut usb_builder, &mut state, 64);
 
-    let mut usb_dev = builder.build();
+    let mut usb_dev = usb_builder.build();
 
     // Run USB device stack and heartbeat writer concurrently
     let usb_fut = usb_dev.run();
@@ -105,9 +133,16 @@ async fn main(_spawner: Spawner) -> ! {
         }
     };
 
+    spawner
+        .spawn(display::display_task(i2c0, display_signal))
+        .unwrap();
+
+    display_signal.signal(DisplayContent::Initialized);
+
     join(usb_fut, heartbeat_fut).await;
 
     // join never returns — USB device runs forever
+    #[allow(clippy::empty_loop)]
     loop {}
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v~1.0/examples
