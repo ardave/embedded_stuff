@@ -30,10 +30,10 @@ ESP32-S2 native USB requires `--no-stub` and manual bootloader entry. The defaul
 2. Flash (one of):
 ```bash
 # Via cargo run (uses .cargo/config.toml runner with --no-stub):
-cargo run --release
+cargo run
 
 # Or directly:
-espflash flash --no-stub --before no-reset --port /dev/cu.usbmodem01 --chip esp32s2 target/xtensa-esp32s2-none-elf/release/fitness_tracker_embassy
+espflash flash --no-stub --before no-reset --port /dev/cu.usbmodem01 --chip esp32s2 target/xtensa-esp32s2-none-elf/debug/fitness_tracker_embassy
 ```
 > **Note:** Use `--before no-reset` when flashing directly, since the board was manually placed into bootloader mode. `cargo run` uses the runner in `.cargo/config.toml` which omits `--before` (espflash default-reset works when the board is freshly in bootloader mode).
 
@@ -43,9 +43,9 @@ espflash flash --no-stub --before no-reset --port /dev/cu.usbmodem01 --chip esp3
 
 The firmware provides USB CDC serial output via `embassy-usb` CDC ACM class. After pressing RESET and the firmware is running:
 ```bash
-tio /dev/cu.usbmodem01
+tio /dev/cu.usbmodem123456781
 # or
-cat /dev/cu.usbmodem01
+cat /dev/cu.usbmodem123456781
 ```
 > The USB CDC device enumerates after firmware boots (press RESET after flashing). The USB serial port may re-enumerate after reset — if `/dev/cu.usbmodem01` is not found, check `ls /dev/cu.usbmodem*` for the new port name. `espflash monitor` does **not** work reliably on this board.
 

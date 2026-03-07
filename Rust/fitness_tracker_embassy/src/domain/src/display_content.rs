@@ -2,6 +2,7 @@
 pub enum DisplayContent {
     Reading(Option<Mph>, Option<NumSatellites>),
     GPSError,
+    Initialized,
 }
 
 #[derive(Clone, Copy, Debug)]

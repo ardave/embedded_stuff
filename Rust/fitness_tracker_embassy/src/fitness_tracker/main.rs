@@ -13,19 +13,21 @@ use embassy_futures::join::join;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer};
-use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::Builder;
+use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use esp_hal::clock::CpuClock;
-use esp_hal::i2c::master::{Config as I2cConfig, I2c};
-use esp_hal::otg_fs::asynch::{Config as OtgConfig, Driver};
+use esp_hal::i2c::master::Config as I2cConfig;
 use esp_hal::otg_fs::Usb;
+use esp_hal::otg_fs::asynch::{Config as OtgConfig, Driver};
 use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 use static_cell::StaticCell;
 
 pub mod display;
+pub mod sh1107;
 
-static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent>> = StaticCell::new();
+static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent>> =
+    StaticCell::new();
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -84,13 +86,22 @@ async fn main(spawner: Spawner) -> ! {
 
     let mut state = State::new();
 
+    // Enable I2C / STEMMA QT power (GPIO7 must be HIGH on Adafruit ESP32-S2 Feather Rev C)
+    let _i2c_power = esp_hal::gpio::Output::new(
+        peripherals.GPIO7,
+        esp_hal::gpio::Level::High,
+        esp_hal::gpio::OutputConfig::default(),
+    );
+    Timer::after(Duration::from_millis(250)).await;
+
     let i2c0_config = I2cConfig::default().with_frequency(esp_hal::time::Rate::from_khz(200));
-    let i2c0 = esp_hal::i2c::master::I2c::new(peripherals.I2C0, i2c0_config).unwrap()
+    let i2c0 = esp_hal::i2c::master::I2c::new(peripherals.I2C0, i2c0_config)
+        .unwrap()
         .with_sda(peripherals.GPIO3)
         .with_scl(peripherals.GPIO4)
         .into_async();
 
-    DISPLAY_SIGNAL.init(Signal::new());
+    let display_signal = DISPLAY_SIGNAL.init(Signal::new());
 
     let mut usb_builder = Builder::new(
         driver,
@@ -122,13 +133,16 @@ async fn main(spawner: Spawner) -> ! {
         }
     };
 
+    spawner
+        .spawn(display::display_task(i2c0, display_signal))
+        .unwrap();
 
-
-    spawner.spawn(display::display_task(i2c0, DISPLAY_SIGNAL)).unwrap();
+    display_signal.signal(DisplayContent::Initialized);
 
     join(usb_fut, heartbeat_fut).await;
 
     // join never returns — USB device runs forever
+    #[allow(clippy::empty_loop)]
     loop {}
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v~1.0/examples
