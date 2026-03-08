@@ -24,7 +24,7 @@ use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 use static_cell::StaticCell;
 
-use crate::tasks::usb_otg_logger::LogChannel;
+use crate::tasks::usb_otg_logger::LogMessage;
 
 pub mod sh1107;
 pub mod tasks;
@@ -32,7 +32,7 @@ pub mod tasks;
 static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent>> =
     StaticCell::new();
 
-static LOG_CHANNEL: StaticCell<LogChannel> = StaticCell::new();
+static LOG_CHANNEL: StaticCell<Channel<CriticalSectionRawMutex, LogMessage, 8>> = StaticCell::new();
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -66,29 +66,6 @@ async fn main(spawner: Spawner) -> ! {
 
     println!("Fitness tracker embassy started!");
 
-    // Initialize USB OTG peripheral (GPIO20 = D+, GPIO19 = D-)
-    let usb = Usb::new(peripherals.USB0, peripherals.GPIO20, peripherals.GPIO19);
-
-    // Create async USB driver
-    let mut ep_out_buffer = [0u8; 1024];
-    let driver = Driver::new(usb, &mut ep_out_buffer, OtgConfig::default());
-
-    // Configure USB device descriptor
-    let mut usb_config = embassy_usb::Config::new(0x303A, 0x3001);
-    usb_config.manufacturer = Some("Dave Falkner");
-    usb_config.product = Some("Fitness Tracker");
-    usb_config.serial_number = Some("00000001");
-    // Required for Windows composite device compatibility
-    usb_config.device_class = 0xEF;
-    usb_config.device_sub_class = 0x02;
-    usb_config.device_protocol = 0x01;
-    usb_config.composite_with_iads = true;
-
-    // Descriptor buffers
-    let mut config_descriptor = [0; 256];
-    let mut bos_descriptor = [0; 256];
-    let mut control_buf = [0; 64];
-
     let mut state = State::new();
     let log_channel = LOG_CHANNEL.init(Channel::new());
 
@@ -109,48 +86,44 @@ async fn main(spawner: Spawner) -> ! {
 
     let display_signal = DISPLAY_SIGNAL.init(Signal::new());
 
-    let mut usb_builder = Builder::new(
-        driver,
-        usb_config,
-        &mut config_descriptor,
-        &mut bos_descriptor,
-        &mut [], // no msos descriptors
-        &mut control_buf,
-    );
-
-    // Create CDC ACM serial class (max packet size 64)
-    let mut class = CdcAcmClass::new(&mut usb_builder, &mut state, 64);
-
-    let mut usb_dev = usb_builder.build();
+    //let mut usb_dev = usb_builder.build();
 
     // Run USB device stack and heartbeat writer concurrently
-    let usb_fut = usb_dev.run();
+    //let usb_fut = usb_dev.run();
     let heartbeat_fut = async {
         loop {
-            class.wait_connection().await;
+            //class.wait_connection().await;
             println!("USB CDC connected");
             loop {
                 let sender = log_channel.sender();
-                if class.write_packet(b"heartbeat\r\n").await.is_err() {
-                    break;
-                }
+                let hearbeat_msg = heapless::String::try_from("hello world").unwrap();
+                sender.send(hearbeat_msg).await;
+
+                // if class.write_packet(b"heartbeat\r\n").await.is_err() {
+                //     break;
+                // }
                 Timer::after(Duration::from_secs(1)).await;
             }
-            println!("USB CDC disconnected");
         }
     };
+
+    let x = peripherals.USB0;
 
     spawner
         .spawn(tasks::display::display_task(i2c0, display_signal))
         .unwrap();
 
     spawner
-        .spawn(tasks::usb_otg_logger::logging_task(log_channel.receiver()))
+        .spawn(tasks::usb_otg_logger::logging_task(
+            peripherals.USB0,
+            peripherals.GPIO19,
+            peripherals.GPIO20,
+            log_channel.receiver(),))
         .unwrap();
 
     display_signal.signal(DisplayContent::Initialized);
 
-    join(usb_fut, heartbeat_fut).await;
+    heartbeat_fut.await;
 
     // join never returns — USB device runs forever
     #[allow(clippy::empty_loop)]
