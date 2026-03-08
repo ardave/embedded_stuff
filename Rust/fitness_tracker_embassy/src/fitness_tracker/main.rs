@@ -11,6 +11,7 @@ use domain::display_content::DisplayContent;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::Channel;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer};
 use embassy_usb::Builder;
@@ -23,11 +24,15 @@ use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 use static_cell::StaticCell;
 
+use crate::tasks::usb_otg_logger::LogChannel;
+
 pub mod sh1107;
 pub mod tasks;
 
 static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent>> =
     StaticCell::new();
+
+static LOG_CHANNEL: StaticCell<LogChannel> = StaticCell::new();
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -85,6 +90,7 @@ async fn main(spawner: Spawner) -> ! {
     let mut control_buf = [0; 64];
 
     let mut state = State::new();
+    let log_channel = LOG_CHANNEL.init(Channel::new());
 
     // Enable I2C / STEMMA QT power (GPIO7 must be HIGH on Adafruit ESP32-S2 Feather Rev C)
     let _i2c_power = esp_hal::gpio::Output::new(
@@ -124,6 +130,7 @@ async fn main(spawner: Spawner) -> ! {
             class.wait_connection().await;
             println!("USB CDC connected");
             loop {
+                let sender = log_channel.sender();
                 if class.write_packet(b"heartbeat\r\n").await.is_err() {
                     break;
                 }
@@ -135,6 +142,10 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner
         .spawn(tasks::display::display_task(i2c0, display_signal))
+        .unwrap();
+
+    spawner
+        .spawn(tasks::usb_otg_logger::logging_task(log_channel.receiver()))
         .unwrap();
 
     display_signal.signal(DisplayContent::Initialized);
