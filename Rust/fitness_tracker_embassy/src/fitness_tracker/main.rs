@@ -8,6 +8,7 @@
 #![deny(clippy::large_stack_frames)]
 
 use domain::display_content::DisplayContent;
+use domain::gps_stuff::FitnessTrackerSentence;
 use embassy_executor::Spawner;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
@@ -28,6 +29,8 @@ static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent
     StaticCell::new();
 
 static LOG_CHANNEL: StaticCell<Channel<CriticalSectionRawMutex, LogMessage, 8>> = StaticCell::new();
+
+static GPS_POSITION_CHANNEL: StaticCell<Channel<CriticalSectionRawMutex, FitnessTrackerSentence, 8>> = StaticCell::new();
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -62,6 +65,17 @@ async fn main(spawner: Spawner) -> ! {
     println!("Fitness tracker embassy started!");
 
     let log_channel = LOG_CHANNEL.init(Channel::new());
+    let gps_channel = GPS_POSITION_CHANNEL.init(Channel::new());
+
+    // PA1010D GPS on UART1: board TX (GPIO39) → GPS RXI, board RX (GPIO38) ← GPS TXO
+    let uart_config = esp_hal::uart::Config::default()
+        .with_baudrate(9600);
+    let (uart_rx, _uart_tx) = esp_hal::uart::Uart::new(peripherals.UART1, uart_config)
+        .unwrap()
+        .with_tx(peripherals.GPIO39)
+        .with_rx(peripherals.GPIO38)
+        .into_async()
+        .split();
 
     // Enable I2C / STEMMA QT power (GPIO7 must be HIGH on Adafruit ESP32-S2 Feather Rev C)
     let _i2c_power = esp_hal::gpio::Output::new(
@@ -98,6 +112,12 @@ async fn main(spawner: Spawner) -> ! {
             peripherals.GPIO19,
             peripherals.GPIO20,
             log_channel.receiver(),))
+        .unwrap();
+
+    spawner
+        .spawn(tasks::gps_acquisition::gps_acquisition_task(
+            uart_rx,
+            gps_channel.sender()))
         .unwrap();
 
     display_signal.signal(DisplayContent::Initialized);
