@@ -9,22 +9,17 @@
 
 use domain::display_content::DisplayContent;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer};
-use embassy_usb::Builder;
-use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use esp_hal::clock::CpuClock;
 use esp_hal::i2c::master::Config as I2cConfig;
-use esp_hal::otg_fs::Usb;
-use esp_hal::otg_fs::asynch::{Config as OtgConfig, Driver};
 use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 use static_cell::StaticCell;
 
-use crate::tasks::usb_otg_logger::LogMessage;
+use crate::tasks::usb_otg_logger::{LogMessage, usb_log};
 
 pub mod sh1107;
 pub mod tasks;
@@ -66,7 +61,6 @@ async fn main(spawner: Spawner) -> ! {
 
     println!("Fitness tracker embassy started!");
 
-    let mut state = State::new();
     let log_channel = LOG_CHANNEL.init(Channel::new());
 
     // Enable I2C / STEMMA QT power (GPIO7 must be HIGH on Adafruit ESP32-S2 Feather Rev C)
@@ -86,28 +80,13 @@ async fn main(spawner: Spawner) -> ! {
 
     let display_signal = DISPLAY_SIGNAL.init(Signal::new());
 
-    //let mut usb_dev = usb_builder.build();
-
-    // Run USB device stack and heartbeat writer concurrently
-    //let usb_fut = usb_dev.run();
     let heartbeat_fut = async {
         loop {
-            //class.wait_connection().await;
-            println!("USB CDC connected");
-            loop {
-                let sender = log_channel.sender();
-                let hearbeat_msg = heapless::String::try_from("hello world").unwrap();
-                sender.send(hearbeat_msg).await;
-
-                // if class.write_packet(b"heartbeat\r\n").await.is_err() {
-                //     break;
-                // }
-                Timer::after(Duration::from_secs(1)).await;
-            }
+            let sender = log_channel.sender();
+            usb_log(&sender, "hello world");
+            Timer::after(Duration::from_secs(1)).await;
         }
     };
-
-    let x = peripherals.USB0;
 
     spawner
         .spawn(tasks::display::display_task(i2c0, display_signal))
