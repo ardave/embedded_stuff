@@ -1,15 +1,16 @@
 use domain::gps_stuff::FitnessTrackerSentence;
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Sender};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pubsub::Publisher};
 use esp_hal::uart::UartRx;
 use nmea0183::Parser;
 
-pub(crate) type GpsSender = Sender<'static, CriticalSectionRawMutex, FitnessTrackerSentence, 8>;
+pub(crate) type GpsPublisher =
+    Publisher<'static, CriticalSectionRawMutex, FitnessTrackerSentence, 8, 4, 1>;
 
 // todo Select which NMEA sentences to output.
 #[embassy_executor::task]
 pub async fn gps_acquisition_task(
     mut uart: UartRx<'static, esp_hal::Async>,
-    gps_sender: GpsSender,
+    gps_publisher: GpsPublisher,
 ) {
     let mut buf = [0u8; 128];
     let mut parser = Parser::new();
@@ -27,10 +28,10 @@ pub async fn gps_acquisition_task(
                 if let Ok(sentence) = result {
                     match sentence {
                         nmea0183::ParseResult::GGA(Some(gga)) => {
-                            gps_sender.send(FitnessTrackerSentence::FixData(gga.into())).await;
+                            gps_publisher.publish(FitnessTrackerSentence::FixData(gga.into())).await;
                         }
                         nmea0183::ParseResult::RMC(Some(rmc)) => {
-                            gps_sender.send(FitnessTrackerSentence::MinNav(rmc.into())).await;
+                            gps_publisher.publish(FitnessTrackerSentence::MinNav(rmc.into())).await;
                         }
                         _ => {} // ignore other sentence types
                     }

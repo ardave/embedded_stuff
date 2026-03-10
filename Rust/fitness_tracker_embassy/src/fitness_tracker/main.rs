@@ -12,6 +12,7 @@ use domain::gps_stuff::FitnessTrackerSentence;
 use embassy_executor::Spawner;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
+use embassy_sync::pubsub::PubSubChannel;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer};
 use esp_hal::clock::CpuClock;
@@ -30,7 +31,7 @@ static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent
 
 static LOG_CHANNEL: StaticCell<Channel<CriticalSectionRawMutex, LogMessage, 8>> = StaticCell::new();
 
-static GPS_POSITION_CHANNEL: StaticCell<Channel<CriticalSectionRawMutex, FitnessTrackerSentence, 8>> = StaticCell::new();
+static GPS_POSITION_CHANNEL: StaticCell<PubSubChannel<CriticalSectionRawMutex, FitnessTrackerSentence, 8, 4, 1>> = StaticCell::new();
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -65,7 +66,7 @@ async fn main(spawner: Spawner) -> ! {
     println!("Fitness tracker embassy started!");
 
     let log_channel = LOG_CHANNEL.init(Channel::new());
-    let gps_channel = GPS_POSITION_CHANNEL.init(Channel::new());
+    let gps_channel = GPS_POSITION_CHANNEL.init(PubSubChannel::new());
 
     // PA1010D GPS on UART1: board TX (GPIO39) → GPS RXI, board RX (GPIO38) ← GPS TXO
     let uart_config = esp_hal::uart::Config::default()
@@ -117,7 +118,7 @@ async fn main(spawner: Spawner) -> ! {
     spawner
         .spawn(tasks::gps_acquisition::gps_acquisition_task(
             uart_rx,
-            gps_channel.sender()))
+            gps_channel.publisher().unwrap()))
         .unwrap();
 
     display_signal.signal(DisplayContent::Initialized);
