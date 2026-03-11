@@ -69,14 +69,17 @@ async fn main(spawner: Spawner) -> ! {
     let gps_channel = GPS_POSITION_CHANNEL.init(PubSubChannel::new());
 
     // PA1010D GPS on UART1: board TX (GPIO39) → GPS RXI, board RX (GPIO38) ← GPS TXO
-    let uart_config = esp_hal::uart::Config::default()
-        .with_baudrate(9600);
-    let (uart_rx, _uart_tx) = esp_hal::uart::Uart::new(peripherals.UART1, uart_config)
-        .unwrap()
-        .with_tx(peripherals.GPIO39)
-        .with_rx(peripherals.GPIO38)
-        .into_async()
-        .split();
+    #[cfg(not(feature = "fake-gps"))]
+    let (uart_rx, _uart_tx) = {
+        let uart_config = esp_hal::uart::Config::default()
+            .with_baudrate(9600);
+        esp_hal::uart::Uart::new(peripherals.UART1, uart_config)
+            .unwrap()
+            .with_tx(peripherals.GPIO39)
+            .with_rx(peripherals.GPIO38)
+            .into_async()
+            .split()
+    };
 
     // Enable I2C / STEMMA QT power (GPIO7 must be HIGH on Adafruit ESP32-S2 Feather Rev C)
     let _i2c_power = esp_hal::gpio::Output::new(
@@ -115,11 +118,18 @@ async fn main(spawner: Spawner) -> ! {
             log_channel.receiver(),))
         .unwrap();
 
+    #[cfg(not(feature = "fake-gps"))]
     spawner
         .spawn(tasks::gps_acquisition::gps_acquisition_task(
             uart_rx,
             gps_channel.publisher().unwrap(),
             display_signal))
+        .unwrap();
+
+    #[cfg(feature = "fake-gps")]
+    spawner
+        .spawn(tasks::fake_gps::fake_gps_task(
+            gps_channel.publisher().unwrap()))
         .unwrap();
 
     spawner

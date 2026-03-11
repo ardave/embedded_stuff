@@ -8,6 +8,10 @@ name         = "fitness_tracker_embassy"
 rust-version = "1.88"
 version      = "0.1.0"
 
+[features]
+default = []
+fake-gps = []
+
 [[bin]]
 name = "fitness_tracker_embassy"
 path = "./src/fitness_tracker/main.rs"
