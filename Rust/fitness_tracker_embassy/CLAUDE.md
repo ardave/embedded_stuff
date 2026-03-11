@@ -43,9 +43,9 @@ espflash flash --no-stub --before no-reset --port /dev/cu.usbmodem01 --chip esp3
 
 The firmware provides USB CDC serial output via `embassy-usb` CDC ACM class. After pressing RESET and the firmware is running:
 ```bash
-tio /dev/cu.usbmodem123456781
+tio /dev/cu.usbmodem000000011
 # or
-cat /dev/cu.usbmodem123456781
+cat /dev/cu.usbmodem000000011
 ```
 > The USB CDC device enumerates after firmware boots (press RESET after flashing). The USB serial port may re-enumerate after reset — if `/dev/cu.usbmodem01` is not found, check `ls /dev/cu.usbmodem*` for the new port name. `espflash monitor` does **not** work reliably on this board.
 

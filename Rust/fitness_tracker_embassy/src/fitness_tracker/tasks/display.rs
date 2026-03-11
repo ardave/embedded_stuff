@@ -55,11 +55,24 @@ pub async fn display_task(
                     let _ = Text::new("-- sats", Point::new(0, 64), style).draw(&mut display);
                 }
             }
+            DisplayContent::GPSNoFix => {
+                let _ = Text::new("No fix", Point::new(0, 30), style).draw(&mut display);
+            }
             DisplayContent::GPSError => {
                 let _ = Text::new("GPS Err", Point::new(0, 30), style).draw(&mut display);
             }
             DisplayContent::Initialized => {
                 let _ = Text::new("Ready!", Point::new(0, 30), style).draw(&mut display);
+            }
+            DisplayContent::DbgUartRead(n) => {
+                let s = format_to_buf(&mut line_buf, |w| write!(w, "UART: {}B", n));
+                let _ = Text::new(s, Point::new(0, 30), style).draw(&mut display);
+            }
+            DisplayContent::DbgUartErr => {
+                let _ = Text::new("UART Err", Point::new(0, 30), style).draw(&mut display);
+            }
+            DisplayContent::DbgParsed => {
+                let _ = Text::new("Parsed!", Point::new(0, 30), style).draw(&mut display);
             }
         }
 

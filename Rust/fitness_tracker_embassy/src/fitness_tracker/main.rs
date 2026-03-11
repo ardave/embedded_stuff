@@ -7,7 +7,7 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
-use domain::display_content::DisplayContent;
+use domain::{display_content::DisplayContent, gps_stuff::GPSAcquisitionError};
 use domain::gps_stuff::FitnessTrackerSentence;
 use embassy_executor::Spawner;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -31,7 +31,7 @@ static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent
 
 static LOG_CHANNEL: StaticCell<Channel<CriticalSectionRawMutex, LogMessage, 8>> = StaticCell::new();
 
-static GPS_POSITION_CHANNEL: StaticCell<PubSubChannel<CriticalSectionRawMutex, FitnessTrackerSentence, 8, 4, 1>> = StaticCell::new();
+static GPS_POSITION_CHANNEL: StaticCell<PubSubChannel<CriticalSectionRawMutex, Result<FitnessTrackerSentence, GPSAcquisitionError>, 8, 4, 1>> = StaticCell::new();
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -118,7 +118,15 @@ async fn main(spawner: Spawner) -> ! {
     spawner
         .spawn(tasks::gps_acquisition::gps_acquisition_task(
             uart_rx,
-            gps_channel.publisher().unwrap()))
+            gps_channel.publisher().unwrap(),
+            display_signal))
+        .unwrap();
+
+    spawner
+        .spawn(tasks::gps_aggregator::gps_aggregator_task(
+            gps_channel.subscriber().unwrap(),
+            display_signal)
+        )
         .unwrap();
 
     display_signal.signal(DisplayContent::Initialized);

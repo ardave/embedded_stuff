@@ -149,3 +149,10 @@ impl TryFrom<usize> for FixMethod {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum GPSAcquisitionError {
+    UartReadError,
+    NMEAParseError,
+    NoFix,
+}
