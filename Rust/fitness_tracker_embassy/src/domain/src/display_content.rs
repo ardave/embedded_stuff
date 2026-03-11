@@ -2,7 +2,10 @@
 pub enum DisplayContent {
     Reading(Option<Mph>, Option<NumSatellites>),
     GPSError,
+    GPSNoFix,
     Initialized,
+    /// Debug: UART read error
+    DbgUartErr,
 }
 
 #[derive(Clone, Copy, Debug)]

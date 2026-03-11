@@ -2,3 +2,8 @@
 edition = "2024"
 name = "domain"
 version = "0.1.0"
+
+[dependencies]
+chrono = { version = "0.4.44", default-features = false }
+embassy-time = "0.5.0"
+nmea0183 = "0.6.0"
