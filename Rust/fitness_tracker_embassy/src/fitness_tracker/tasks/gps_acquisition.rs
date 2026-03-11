@@ -22,7 +22,6 @@ pub async fn gps_acquisition_task(
     loop {
         let len = match uart.read_async(&mut buf).await {
             Ok(len) => {
-                display_signal.signal(DisplayContent::DbgUartRead(len));
                 len
             }
             Err(_rx_error) => {
@@ -33,7 +32,6 @@ pub async fn gps_acquisition_task(
 
         for byte in &buf[..len] {
             if let Some(result) = parser.parse_from_byte(*byte) {
-                display_signal.signal(DisplayContent::DbgParsed);
                 match result {
                     Ok(nmea0183::ParseResult::GGA(Some(gga))) => {
                         gps_publisher.publish(Ok(FitnessTrackerSentence::FixData(gga.into()))).await;

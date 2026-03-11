@@ -4,12 +4,8 @@ pub enum DisplayContent {
     GPSError,
     GPSNoFix,
     Initialized,
-    /// Debug: UART read returned N bytes
-    DbgUartRead(usize),
     /// Debug: UART read error
     DbgUartErr,
-    /// Debug: parser produced a result
-    DbgParsed,
 }
 
 #[derive(Clone, Copy, Debug)]
