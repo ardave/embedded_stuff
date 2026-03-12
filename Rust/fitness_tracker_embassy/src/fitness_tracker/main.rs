@@ -7,8 +7,8 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
-use domain::{display_content::DisplayContent, gps_stuff::GPSAcquisitionError};
 use domain::gps_stuff::FitnessTrackerSentence;
+use domain::{display_content::DisplayContent, gps_stuff::GPSAcquisitionError};
 use embassy_executor::Spawner;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
@@ -17,6 +17,7 @@ use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer};
 use esp_hal::clock::CpuClock;
 use esp_hal::i2c::master::Config as I2cConfig;
+use esp_hal::spi::master::Config as SpiConfig;
 use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 use static_cell::StaticCell;
@@ -31,7 +32,15 @@ static DISPLAY_SIGNAL: StaticCell<Signal<CriticalSectionRawMutex, DisplayContent
 
 static LOG_CHANNEL: StaticCell<Channel<CriticalSectionRawMutex, LogMessage, 8>> = StaticCell::new();
 
-static GPS_POSITION_CHANNEL: StaticCell<PubSubChannel<CriticalSectionRawMutex, Result<FitnessTrackerSentence, GPSAcquisitionError>, 8, 4, 1>> = StaticCell::new();
+static GPS_POSITION_CHANNEL: StaticCell<
+    PubSubChannel<
+        CriticalSectionRawMutex,
+        Result<FitnessTrackerSentence, GPSAcquisitionError>,
+        8,
+        4,
+        1,
+    >,
+> = StaticCell::new();
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -71,8 +80,7 @@ async fn main(spawner: Spawner) -> ! {
     // PA1010D GPS on UART1: board TX (GPIO39) → GPS RXI, board RX (GPIO38) ← GPS TXO
     #[cfg(not(feature = "fake-gps"))]
     let (uart_rx, _uart_tx) = {
-        let uart_config = esp_hal::uart::Config::default()
-            .with_baudrate(9600);
+        let uart_config = esp_hal::uart::Config::default().with_baudrate(9600);
         esp_hal::uart::Uart::new(peripherals.UART1, uart_config)
             .unwrap()
             .with_tx(peripherals.GPIO39)
@@ -96,6 +104,23 @@ async fn main(spawner: Spawner) -> ! {
         .with_scl(peripherals.GPIO4)
         .into_async();
 
+    // SPI for SD card: GPIO36 (SCK), GPIO35 (MOSI), GPIO37 (MISO), GPIO10 (CS)
+    let spi_config = SpiConfig::default();
+    let spi = esp_hal::spi::master::Spi::new(peripherals.SPI2, spi_config)
+        .unwrap()
+        .with_sck(peripherals.GPIO36)
+        .with_mosi(peripherals.GPIO35)
+        .with_miso(peripherals.GPIO37);
+
+    let sd_cs = esp_hal::gpio::Output::new(
+        peripherals.GPIO10,
+        esp_hal::gpio::Level::High,
+        esp_hal::gpio::OutputConfig::default(),
+    );
+    let sd_spi_device =
+        embedded_hal_bus::spi::ExclusiveDevice::new(spi, sd_cs, esp_hal::delay::Delay::new())
+            .unwrap();
+
     let display_signal = DISPLAY_SIGNAL.init(Signal::new());
 
     let heartbeat_fut = async {
@@ -115,7 +140,8 @@ async fn main(spawner: Spawner) -> ! {
             peripherals.USB0,
             peripherals.GPIO19,
             peripherals.GPIO20,
-            log_channel.receiver(),))
+            log_channel.receiver(),
+        ))
         .unwrap();
 
     #[cfg(not(feature = "fake-gps"))]
@@ -123,20 +149,29 @@ async fn main(spawner: Spawner) -> ! {
         .spawn(tasks::gps_acquisition::gps_acquisition_task(
             uart_rx,
             gps_channel.publisher().unwrap(),
-            display_signal))
+            display_signal,
+        ))
         .unwrap();
 
     #[cfg(feature = "fake-gps")]
     spawner
         .spawn(tasks::fake_gps::fake_gps_task(
-            gps_channel.publisher().unwrap()))
+            gps_channel.publisher().unwrap(),
+        ))
         .unwrap();
 
     spawner
         .spawn(tasks::gps_aggregator::gps_aggregator_task(
             gps_channel.subscriber().unwrap(),
-            display_signal)
-        )
+            display_signal,
+        ))
+        .unwrap();
+
+    spawner
+        .spawn(tasks::sd_card::sd_task(
+            sd_spi_device,
+            gps_channel.subscriber().unwrap(),
+        ))
         .unwrap();
 
     display_signal.signal(DisplayContent::Initialized);

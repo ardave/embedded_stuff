@@ -69,7 +69,10 @@ esp-println = { version = "0.16.1", features = ["esp32s2"] }
 domain = { path = "src/domain" }
 embassy-sync = "0.7.2"
 embedded-graphics = "0.8"
+embedded-hal = "1.0"
 embedded-hal-async = "1.0"
+embedded-hal-bus = "0.3"
+embedded-sdmmc = "0.8"
 heapless = "0.9.2"
 nmea0183 = "0.6.0"
 

@@ -34,13 +34,12 @@ macro_rules! usb_log_fmt {
     }};
 }
 
-
 #[embassy_executor::task]
 pub(crate) async fn logging_task(
     usb0: USB0<'static>,
     gpio19: GPIO19<'static>,
     gpio20: GPIO20<'static>,
-    log_channel: LogReceiver
+    log_channel: LogReceiver,
 ) {
     // Initialize USB OTG peripheral (GPIO20 = D+, GPIO19 = D-)
     let usb = Usb::new(usb0, gpio20, gpio19);
