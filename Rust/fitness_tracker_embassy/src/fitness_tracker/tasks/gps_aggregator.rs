@@ -1,9 +1,20 @@
-use domain::{display_content::{DisplayContent, Mph, NumSatellites}, gps_stuff::{FitnessTrackerSentence, FixQualityData, GPSAcquisitionError, RequiredNavData}};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pubsub::Subscriber, signal::Signal};
+use domain::{
+    display_content::{DisplayContent, Mph, NumSatellites},
+    gps_stuff::{FitnessTrackerSentence, FixQualityData, GPSAcquisitionError, RequiredNavData},
+};
+use embassy_sync::{
+    blocking_mutex::raw::CriticalSectionRawMutex, pubsub::Subscriber, signal::Signal,
+};
 use embassy_time::{Duration, Instant};
 
-pub(crate) type GpsSubscriber =
-    Subscriber<'static, CriticalSectionRawMutex, Result<FitnessTrackerSentence, GPSAcquisitionError>, 8, 4, 1>;
+pub(crate) type GpsSubscriber = Subscriber<
+    'static,
+    CriticalSectionRawMutex,
+    Result<FitnessTrackerSentence, GPSAcquisitionError>,
+    8,
+    4,
+    1,
+>;
 
 #[embassy_executor::task]
 pub async fn gps_aggregator_task(
@@ -14,6 +25,7 @@ pub async fn gps_aggregator_task(
         Ok((None, None));
 
     loop {
+        // There's an alternate fn which requires you to acknowlege possible dropped messages:
         let gps_result = gps_subscriber.next_message_pure().await;
 
         match gps_result {
@@ -27,7 +39,7 @@ pub async fn gps_aggregator_task(
                         state = Ok((Some(rnd), existing_fqd));
                     }
                 }
-            },
+            }
             Err(gps_acquisition_error) => state = Err(gps_acquisition_error),
         }
 

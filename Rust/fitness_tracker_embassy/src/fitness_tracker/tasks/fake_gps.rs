@@ -1,5 +1,5 @@
 use domain::gps_stuff::{
-    FixMethod, FixQualityData, FitnessTrackerSentence, GPSAcquisitionError, NavMode, NavSystem,
+    FitnessTrackerSentence, FixMethod, FixQualityData, GPSAcquisitionError, NavMode, NavSystem,
     RequiredNavData,
 };
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -24,15 +24,54 @@ struct Waypoint {
 }
 
 const ROUTE: &[Waypoint] = &[
-    Waypoint { lat: 40.7484, lon: -73.9856, altitude: 10.0, speed_mph: 3.1, course: 0.0 },
-    Waypoint { lat: 40.7486, lon: -73.9853, altitude: 10.5, speed_mph: 3.3, course: 45.0 },
-    Waypoint { lat: 40.7488, lon: -73.9850, altitude: 11.0, speed_mph: 3.5, course: 90.0 },
-    Waypoint { lat: 40.7490, lon: -73.9848, altitude: 10.8, speed_mph: 3.4, course: 180.0 },
-    Waypoint { lat: 40.7488, lon: -73.9850, altitude: 10.3, speed_mph: 3.2, course: 270.0 },
-    Waypoint { lat: 40.7486, lon: -73.9853, altitude: 10.0, speed_mph: 3.1, course: 315.0 },
+    Waypoint {
+        lat: 40.7484,
+        lon: -73.9856,
+        altitude: 10.0,
+        speed_mph: 3.1,
+        course: 0.0,
+    },
+    Waypoint {
+        lat: 40.7486,
+        lon: -73.9853,
+        altitude: 10.5,
+        speed_mph: 3.3,
+        course: 45.0,
+    },
+    Waypoint {
+        lat: 40.7488,
+        lon: -73.9850,
+        altitude: 11.0,
+        speed_mph: 3.5,
+        course: 90.0,
+    },
+    Waypoint {
+        lat: 40.7490,
+        lon: -73.9848,
+        altitude: 10.8,
+        speed_mph: 3.4,
+        course: 180.0,
+    },
+    Waypoint {
+        lat: 40.7488,
+        lon: -73.9850,
+        altitude: 10.3,
+        speed_mph: 3.2,
+        course: 270.0,
+    },
+    Waypoint {
+        lat: 40.7486,
+        lon: -73.9853,
+        altitude: 10.0,
+        speed_mph: 3.1,
+        course: 315.0,
+    },
 ];
 
-#[allow(clippy::large_stack_frames, reason = "async task state machine; runs on its own stack")]
+#[allow(
+    clippy::large_stack_frames,
+    reason = "async task state machine; runs on its own stack"
+)]
 #[embassy_executor::task]
 pub async fn fake_gps_task(gps_publisher: GpsPublisher) {
     // Simulate cold start delay
@@ -47,8 +86,8 @@ pub async fn fake_gps_task(gps_publisher: GpsPublisher) {
         let minutes = (seconds % 3600) / 60;
         let secs = seconds % 60;
 
-        let utc_time =
-            domain::chrono::NaiveTime::from_hms_opt(hours, minutes, secs).expect("invalid fake GPS time");
+        let utc_time = domain::chrono::NaiveTime::from_hms_opt(hours, minutes, secs)
+            .expect("invalid fake GPS time");
 
         let fix_data = FixQualityData {
             utc_time,
@@ -66,7 +105,8 @@ pub async fn fake_gps_task(gps_publisher: GpsPublisher) {
 
         Timer::after(Duration::from_millis(100)).await;
 
-        let date = domain::chrono::NaiveDate::from_ymd_opt(2026, 3, 11).expect("invalid fake GPS date");
+        let date =
+            domain::chrono::NaiveDate::from_ymd_opt(2026, 3, 11).expect("invalid fake GPS date");
         let timestamp = date
             .and_hms_opt(hours, minutes, secs)
             .expect("invalid fake GPS datetime");

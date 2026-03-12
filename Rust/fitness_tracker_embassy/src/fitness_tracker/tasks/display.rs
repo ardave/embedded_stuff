@@ -17,7 +17,7 @@ use crate::sh1107::Sh1107;
 
 #[allow(clippy::large_stack_frames)]
 #[embassy_executor::task]
-pub async fn display_task(
+pub(crate) async fn display_task(
     i2c: I2c<'static, esp_hal::Async>,
     signal: &'static Signal<CriticalSectionRawMutex, DisplayContent>,
 ) {
